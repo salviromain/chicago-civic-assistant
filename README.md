@@ -22,11 +22,13 @@ FastAPI · Pydantic · PostgreSQL + pgvector · Gemini · Docker · Cloud Run ·
 ## Quickstart (local)
 
 ```bash
-cp .env.example .env              # add your keys
-docker compose up -d db           # Postgres + pgvector
+cp .env.example .env                      # add your keys
+docker compose up -d db                   # Postgres + pgvector
 pip install -r requirements.txt
+python scripts/check_db.py                # Postgres up, pgvector on, read-only role works
+python -m ingest.load_tables --check      # compare configured columns with the portal
 python -m ingest.load_tables --since 2026-01-01
-uvicorn app.main:app --reload     # http://localhost:8000/docs
+uvicorn app.main:app --reload             # http://localhost:8000/docs
 ```
 
 ## Evaluation
@@ -41,7 +43,9 @@ Results will be published here: router accuracy, SQL execution accuracy, recall@
 ## Data sources
 
 - [Chicago Data Portal](https://data.cityofchicago.org): 311 Service Requests, Building Violations, Building Permits
-- [Municipal Code of Chicago](https://codelibrary.amlegal.com/codes/chicago/latest/chicago_il) (American Legal Publishing; informational copy)
-- City of Chicago budget documents
+- [Municipal Code of Chicago](https://codelibrary.amlegal.com/codes/chicago/latest/chicago_il) chapters 14X-8, 5-12, 5-16 (American Legal Publishing; informational copy)
+- City of Chicago 2027 Budget Recommendations (proposed)
+
+Details, dataset ids and known data traps: [docs/SOURCES.md](docs/SOURCES.md).
 
 *Not legal advice. Answers may be wrong; always check the cited source.*
