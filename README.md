@@ -21,10 +21,13 @@ FastAPI · Pydantic · PostgreSQL + pgvector · Gemini · Docker · Cloud Run ·
 
 ## Quickstart (local)
 
+Prerequisites: Python 3.12+ and Docker (macOS: `brew install --cask docker`, then open Docker once).
+
 ```bash
+python3 -m venv .venv && source .venv/bin/activate   # once per terminal: source .venv/bin/activate
+pip install -r requirements.txt
 cp .env.example .env                      # add your keys
 docker compose up -d db                   # Postgres + pgvector
-pip install -r requirements.txt
 python scripts/check_db.py                # Postgres up, pgvector on, read-only role works
 python -m ingest.load_tables --check      # compare configured columns with the portal
 python -m ingest.load_tables --since 2026-01-01
