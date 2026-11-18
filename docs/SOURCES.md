@@ -7,10 +7,10 @@ Chosen on 2026-11-17. Downloads go in `data/` (git-ignored); this file records w
 | Table | Dataset id | Postgres table | Date filter | Notes |
 | --- | --- | --- | --- | --- |
 | [311 Service Requests](https://data.cityofchicago.org/d/v6vf-nfxy) | `v6vf-nfxy` | `service_requests_311` | `created_date` | Exclude `duplicate = true` for "unique problems". `origin` = Generated In House / Mass Entry are city-generated, not resident reports |
-| [Building Violations](https://data.cityofchicago.org/d/22u3-xenr) | `22u3-xenr` | `building_violations` | `violation_date` | Department of Buildings violations, 2006 to present. Historical record, not current building condition |
+| [Building Violations](https://data.cityofchicago.org/d/22u3-xenr) | `22u3-xenr` | `building_violations` | `violation_date` | Department of Buildings violations, 2006 to present. Historical record, not current building condition. **No ward or community area column**: ward questions need the address or latitude/longitude |
 | [Building Permits](https://data.cityofchicago.org/d/ydr8-5enu) | `ydr8-5enu` | `building_permits` | `issue_date` | Permits issued 2006 to present, excluding voided or revoked permits. `permit_condition` column added Oct 2025 |
 
-Load with `python -m ingest.load_tables --since 2025-01-01`. Run `--check` first: the violations and permits column lists are unconfirmed.
+Load with `python -m ingest.load_tables --since 2025-01-01`. Column lists were confirmed with `--check` on 2026-11-17; 311 and permits matched fully.
 
 ## Documents
 

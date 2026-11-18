@@ -22,3 +22,9 @@ def test_clean_converts_types():
     assert df["created_date"].dtype.kind == "M"
     assert df["ward"].iloc[0] == 25
     assert df["duplicate"].iloc[0] is False or df["duplicate"].iloc[0] == False  # noqa: E712
+
+
+def test_portal_columns_reads_metadata():
+    from ingest.load_tables import portal_columns
+    meta = {"columns": [{"fieldName": "id"}, {"fieldName": "violation_date"}, {"name": "no field"}]}
+    assert portal_columns(meta) == {"id", "violation_date"}

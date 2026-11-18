@@ -8,6 +8,9 @@ Usage:
     python -m ingest.load_tables --since 2025-01-01                 # all three tables
     python -m ingest.load_tables --table violations --since 2026-11-01
     python -m ingest.load_tables --table permits --check            # compare columns, download nothing
+    python -m ingest.load_tables --from-parquet                     # load saved files into Postgres, no download
+
+Settings are read from the environment or from .env in the repo root.
 """
 
 from __future__ import annotations
@@ -19,8 +22,10 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 import requests
+from dotenv import find_dotenv, load_dotenv
 
 PORTAL = "https://data.cityofchicago.org/resource/{id}.json"
+METADATA = "https://data.cityofchicago.org/api/views/{id}.json"
 PAGE_SIZE = 50_000  # max per request on SODA 2.0 endpoints
 
 
@@ -101,10 +106,22 @@ def _get(url: str, params: dict, token: str | None) -> list[dict]:
     return []
 
 
+def portal_columns(metadata: dict) -> set[str]:
+    """Field names from the portal's dataset metadata (the official column list)."""
+    return {c["fieldName"] for c in metadata.get("columns", []) if "fieldName" in c}
+
+
 def check_columns(ds: Dataset, token: str | None) -> list[str]:
-    """Fetch one row and report configured columns the API doesn't have."""
-    sample = _get(PORTAL.format(id=ds.id), {"$limit": 5}, token)
-    available = set().union(*(row.keys() for row in sample)) if sample else set()
+    """Report configured columns the dataset doesn't have.
+
+    Uses the official column list. Sample rows are NOT reliable for this:
+    the API leaves out fields that are empty in a row, so a sparse column
+    can look missing.
+    """
+    headers = {"X-App-Token": token} if token else {}
+    r = requests.get(METADATA.format(id=ds.id), headers=headers, timeout=60)
+    r.raise_for_status()
+    available = portal_columns(r.json())
     missing = [c for c in ds.columns if c not in available]
     extra = sorted(c for c in available - set(ds.columns) if not c.startswith(":@"))
     print(f"\n[{ds.key}] {ds.id} -> {ds.table}")
@@ -155,10 +172,13 @@ def main() -> None:
     p.add_argument("--table", choices=[*DATASETS, "all"], default="all")
     p.add_argument("--since", default="2025-01-01", help="YYYY-MM-DD")
     p.add_argument("--check", action="store_true", help="only compare columns with the API")
+    p.add_argument("--from-parquet", action="store_true",
+                   help="load previously downloaded files into Postgres, no download")
     p.add_argument("--outdir", default="data")
     args = p.parse_args()
 
-    token = os.getenv("SODA_APP_TOKEN")
+    load_dotenv(find_dotenv(usecwd=True))  # read .env so DATABASE_URL and SODA_APP_TOKEN work without `export`
+    token = os.getenv("SODA_APP_TOKEN") or None
     selected = DATASETS.values() if args.table == "all" else [DATASETS[args.table]]
 
     if args.check:
@@ -171,13 +191,24 @@ def main() -> None:
     if db:
         from sqlalchemy import create_engine
         engine = create_engine(db)
+    elif args.from_parquet:
+        raise SystemExit("--from-parquet needs DATABASE_URL (set it in .env)")
+    else:
+        print("DATABASE_URL not set: downloading to files only")
 
     os.makedirs(args.outdir, exist_ok=True)
     for ds in selected:
-        df = download(ds, args.since, token)
         out = os.path.join(args.outdir, f"{ds.table}.parquet")
-        df.to_parquet(out, index=False)  # local copy: reload without re-downloading
-        print(f"  saved {len(df):,} rows to {out}")
+        if args.from_parquet:
+            if not os.path.exists(out):
+                print(f"\n[{ds.key}] no file at {out}, skipping")
+                continue
+            df = pd.read_parquet(out)
+            print(f"\n[{ds.key}] read {len(df):,} rows from {out}")
+        else:
+            df = download(ds, args.since, token)
+            df.to_parquet(out, index=False)  # local copy: reload without re-downloading
+            print(f"  saved {len(df):,} rows to {out}")
         if engine is not None:
             df.to_sql(ds.table, engine, if_exists="replace", index=False,
                       chunksize=10_000, method="multi")

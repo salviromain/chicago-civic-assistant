@@ -8,8 +8,11 @@ Usage:
 import os
 import sys
 
+from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, OperationalError
+
+load_dotenv(find_dotenv(usecwd=True))  # read .env if present
 
 ADMIN_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/civic")
 READER_URL = os.getenv("READONLY_DATABASE_URL",

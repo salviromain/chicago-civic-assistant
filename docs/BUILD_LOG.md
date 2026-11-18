@@ -4,6 +4,51 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Loader fixes: reliable column check, .env support, load saved files
+
+**Goal:** fix three problems found on the first real run of the loader.
+
+### What happened
+
+Running `--check` against the live portal showed all 311 and permits columns exist, but flagged `violation_status_date` in violations as missing. That flag might have been false: the check looked at 5 sample rows, and **the API leaves a field out of a row when it's empty**. A column that's often blank can look like it doesn't exist. The run also showed that the loader ignored `.env`, and that without a database, downloaded files had no way into Postgres later except downloading again.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `ingest/load_tables.py` | `--check` now reads the portal's official column list (`/api/views/<id>.json`) instead of sample rows |
+| `ingest/load_tables.py` | Reads `.env` from the folder you run it in, so `DATABASE_URL` and `SODA_APP_TOKEN` work without `export` |
+| `ingest/load_tables.py` | New `--from-parquet` flag: loads files already in `data/` into Postgres, no download |
+| `ingest/load_tables.py` | Says "downloading to files only" when no database is configured, instead of staying silent |
+| `scripts/check_db.py` | Also reads `.env` |
+| `requirements.txt` | Lists `python-dotenv` explicitly (it was only installed indirectly) |
+| `docs/SOURCES.md` | Columns marked as confirmed; noted that violations has **no ward column** |
+| `tests/test_load_tables.py` | Test for reading the official column list |
+
+### Step by step
+
+1. Replaced the sample-row check with a metadata request. The dataset's metadata lists every column's `fieldName`, empty or not.
+2. Added `load_dotenv(find_dotenv(usecwd=True))`. The `usecwd=True` part matters: by default `python-dotenv` searches for `.env` starting from the *script's* folder, not the folder you're in. Caught by testing from a different folder.
+3. Added `--from-parquet`, which reads `data/<table>.parquet` and writes it to Postgres.
+4. Tested against Postgres 16 + pgvector: a saved violations file loaded with only `.env` configured, then `check_db.py` passed.
+
+### Check it yourself
+
+```bash
+python -m ingest.load_tables --check          # violation_status_date should now resolve correctly
+python -m ingest.load_tables --from-parquet   # after Docker is running: loads what you already downloaded
+pytest -q                                     # 15 tests pass
+```
+
+### Concepts
+
+- **Metadata vs. data:** the column list describes the dataset; rows only show values that exist. To ask "what columns are there?", ask the metadata.
+- **Sparse field:** a column that is empty for most rows. JSON APIs often omit it rather than send `null`.
+- **`.env` file:** a local, untracked file of settings (`NAME=value` lines). `python-dotenv` copies them into environment variables when the script starts.
+- **Missing ward in violations:** a schema gap the SQL agent must know about. "Violations in Ward 25" can't be a simple filter; it needs a join on location (a good harder eval question).
+
+---
+
 ## Setup fixes: virtual environment and Docker prerequisites
 
 **Goal:** make the quickstart work on a fresh Mac. The first real run failed in two places.
