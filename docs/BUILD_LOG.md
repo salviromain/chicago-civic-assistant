@@ -4,6 +4,40 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## CLAUDE.md: project memory for Claude Code
+
+**Goal:** every new Claude Code session starts out knowing what this project is, how the machine is set up, and the rules to follow, without being told again.
+
+### What changed
+
+| File | What it does |
+| --- | --- |
+| `CLAUDE.md` | New: project summary, environment (venv, Docker, `.env`, psycopg 3, Gemini free tier), working rules, data traps, and where we are in the build plan |
+| `docs/BUILD_LOG.md` | This entry |
+
+### Step by step
+
+1. Wrote down what the service does: a router that sends questions to Text-to-SQL (311, violations, permits) and/or hybrid RAG (Municipal Code chapters 14X-8, 5-12, 5-16 and the 2027 proposed budget), with citations and refusals.
+2. Recorded the environment details that are easy to get wrong: always `.venv/bin/python`, `find_dotenv(usecwd=True)`, psycopg 3 rather than psycopg2, and keeping Gemini calls cached and few.
+3. Listed the working rules: a build log entry per commit, `pytest -q` before committing, test data and SQL changes on the real database, never commit `.env` or `data/`, ask before pushing.
+4. Listed the data traps the SQL agent and answers must respect (311 duplicates, city-generated origins, no ward in violations, heat rule 14X-8-803, budget is proposed).
+5. Noted the build plan status: Day 1 done, Day 2 is loading tables and writing table descriptions.
+
+### Check it yourself
+
+```bash
+cat CLAUDE.md
+pytest -q        # still passes; no code changed
+```
+
+Start a new Claude Code session in this folder and ask "what is this project?": it should answer from `CLAUDE.md`.
+
+### Concepts
+
+- **CLAUDE.md:** a Markdown file at the repo root that Claude Code reads automatically at the start of every session. It works like a briefing note: anything written there doesn't need repeating in each chat. Keep it short and current; update it when a rule or the plan changes.
+
+---
+
 ## VS Code setup: interpreter, tasks, debugging
 
 **Goal:** do all the work inside VS Code: run every command from a menu, debug with breakpoints, and run tests from the sidebar.
