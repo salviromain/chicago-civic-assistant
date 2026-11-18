@@ -18,5 +18,10 @@ evals/results/*.jsonl
 
 # OS / editors
 .DS_Store
-.vscode/
+# VS Code: share project setup, keep personal files out
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea/

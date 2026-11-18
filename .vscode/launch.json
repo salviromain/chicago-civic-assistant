@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API: debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--port", "8000"],
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "Loader: check columns",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.load_tables",
+      "args": ["--check"],
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "Loader: one table, small range",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.load_tables",
+      "args": ["--table", "311", "--since", "2026-11-10"],
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "Current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}

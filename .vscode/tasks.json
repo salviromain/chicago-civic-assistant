@@ -1,0 +1,77 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Setup: create venv and install",
+      "type": "shell",
+      "command": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: start",
+      "type": "shell",
+      "command": "docker compose up -d db",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: stop",
+      "type": "shell",
+      "command": "docker compose stop db",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: check",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/check_db.py",
+      "dependsOn": "DB: start",
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: check columns",
+      "type": "shell",
+      "command": ".venv/bin/python -m ingest.load_tables --check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: download and load tables",
+      "type": "shell",
+      "command": ".venv/bin/python -m ingest.load_tables --table ${input:table} --since ${input:since}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: load saved files into Postgres",
+      "type": "shell",
+      "command": ".venv/bin/python -m ingest.load_tables --from-parquet",
+      "problemMatcher": []
+    },
+    {
+      "label": "API: run (reload on save)",
+      "type": "shell",
+      "command": ".venv/bin/uvicorn app.main:app --reload",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: run all",
+      "type": "shell",
+      "command": ".venv/bin/pytest -q",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "table",
+      "type": "pickString",
+      "description": "Which table?",
+      "options": ["all", "311", "violations", "permits"],
+      "default": "all"
+    },
+    {
+      "id": "since",
+      "type": "promptString",
+      "description": "Start date (YYYY-MM-DD)",
+      "default": "2026-10-01"
+    }
+  ]
+}

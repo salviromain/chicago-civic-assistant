@@ -4,6 +4,43 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## VS Code setup: interpreter, tasks, debugging
+
+**Goal:** do all the work inside VS Code: run every command from a menu, debug with breakpoints, and run tests from the sidebar.
+
+### What changed
+
+| File | What it does |
+| --- | --- |
+| `.vscode/settings.json` | Uses `.venv` as the Python interpreter, activates it in every new terminal, loads `.env`, turns on pytest in the Testing sidebar |
+| `.vscode/extensions.json` | Recommends Python, Pylance, Python Debugger, Container Tools (Docker) and PostgreSQL; VS Code offers to install them when you open the folder |
+| `.vscode/tasks.json` | Named commands: create venv, start/stop/check DB, check columns, load tables (asks which table and start date), load saved files, run API, run tests |
+| `.vscode/launch.json` | Debug configurations: the API, the column check, a small one-table load, and the current file |
+| `.gitignore` | Shares these four files; other `.vscode/` files stay private |
+
+### Step by step
+
+1. Chose to commit the VS Code setup so it works the same on any machine that clones the repo.
+2. Pointed the interpreter at `.venv/bin/python`, so imports resolve and the terminal auto-activates the venv.
+3. Wrote one task per command used so far, so nothing needs to be remembered or retyped. "DB: check" starts the database first.
+4. Added debug configurations that run modules (`-m ingest.load_tables`, `uvicorn`) exactly as the terminal does, with `.env` loaded.
+5. Validated all four files as JSON.
+
+### How to use it
+
+- **Run a task:** `Cmd+Shift+P` → "Tasks: Run Task" → pick one.
+- **Debug:** set a breakpoint (click left of a line number), then Run and Debug sidebar (`Cmd+Shift+D`) → pick a configuration → green arrow.
+- **Tests:** the flask icon in the left sidebar; click ▶ next to any test.
+- **Database:** the PostgreSQL extension can connect to `localhost:5432`, database `civic`, user `postgres`, to browse tables and run SQL.
+
+### Concepts
+
+- **Interpreter:** which Python VS Code uses. It must be the venv's, or imports like `pandas` show as missing.
+- **Task:** a saved shell command with a name.
+- **Launch configuration:** how to start a program under the debugger, so it pauses at breakpoints and you can inspect variables.
+
+---
+
 ## Loader fixes: reliable column check, .env support, load saved files
 
 **Goal:** fix three problems found on the first real run of the loader.
