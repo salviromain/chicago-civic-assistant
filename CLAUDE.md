@@ -43,8 +43,28 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 
 ## Build plan
 
-Two weeks.
+Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 makes it good, measured and live. Keep the scope small: 3 tables, 2 document sets.
 
-- Day 1 (data choice + local DB): done.
-- Day 2 (load tables from 2025-01-01, fit Neon's 0.5 GB, `docs/TABLES.md`): done. Tables total 356 MB (`scripts/table_sizes.py`).
-- Day 3 onward: not written down yet; ask. (`app/sql_agent.py` marks the Text-to-SQL agent as Day 5.)
+**Week 1: make it work**
+
+- Day 1, setup and scope: done.
+- Day 2, load the tables (from 2025-01-01) + `docs/TABLES.md`: done. Tables total 356 MB (`scripts/table_sizes.py`).
+- **Day 3 (next), load the documents:** extract text from the code chapters and the budget PDF; chunk by section, keeping the section number and title on each chunk; embed and store in pgvector, with a full-text index next to it.
+- Day 4, search: embedding search and keyword search functions, merged with RRF (hybrid); try 10 questions by hand.
+- Day 5, SQL agent: table descriptions (`docs/TABLES.md`) + few-shot examples in the prompt; guardrails (SELECT-only check, read-only role, row limit).
+- Day 6, router and answer: router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
+- Day 7, FastAPI: `POST /query`, `GET /health`; Pydantic request/response (answer, route, citations, latency, cost). Milestone: question in through the API, cited answer out.
+
+**Week 2: make it good and live**
+
+- Day 8, eval set: ~80 questions (~30 SQL, ~30 docs, ~10 both, ~10 unanswerable) with answers, routes, SQL and source chunks, in `evals/questions.jsonl`.
+- Day 9, eval harness: compute every metric; LLM judge, hand-check 20 verdicts; record the baseline.
+- Day 10, experiments, one change at a time: chunking (500 tokens vs. by section), search (embeddings vs. keyword vs. hybrid), reranker off/on, Gemini Flash vs. Pro. Then score the baseline (Claude + OpenGov MCP) on the same set.
+- Day 11, fix failures: group wrong answers by cause, fix the biggest group, re-run, record the gain.
+- Day 12, production pieces: API key and rate limiting; log latency, tokens and cost per request; Dockerfile.
+- Day 13, deploy and CI: move the database to Neon; deploy to Cloud Run; CI runs tests and a small eval subset on every PR.
+- Day 14, show it: README (problem, diagram, how to run, results table), demo video/GIF, resume bullet with real numbers.
+
+**Metric targets** (starting points; before/after matters more): router 90%+, SQL execution 85%+, recall@5 80%+, MRR 0.6+, faithfulness 90%+, citation accuracy 90%+, answer correctness 80%+, correct refusals 90%+, p95 latency under ~8 s, cost per query reported.
+
+**Open issue:** the plan's example question counts "no-heat complaints" from 311, but 311 has no heat type (checked all 105 types in the full download). Heat questions use the heat violations in `building_violations` instead.

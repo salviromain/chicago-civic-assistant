@@ -4,6 +4,32 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## CLAUDE.md: the full 2-week build plan
+
+**Goal:** every Claude Code session knows what each day of the plan covers and which day is next, instead of having to ask.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | The build plan section now lists all 14 days (from the plan PDF of 2026-11-17), the metric targets, and one open issue |
+
+### Step by step
+
+1. Copied each day's tasks from the plan in short form; Days 1 and 2 marked done, Day 3 (load the documents) marked next.
+2. Added the eval targets, so later work (Day 8 onward) aims at the same numbers.
+3. Checked the plan's example question against the data. "How many no-heat complaints were filed in Ward 25 last winter" assumes 311 has a heat complaint type. It doesn't: none of the 105 types in the full download (excluded ones included) mentions heat, temperature, boiler or furnace. Recorded as an open issue.
+
+### Check it yourself
+
+Open `CLAUDE.md` and read the "Build plan" section. In a new Claude Code session, ask "what's next?": it should say Day 3, load the documents.
+
+### Concepts
+
+- **Checking an example against the data:** a plan written before looking at the data can assume things the data doesn't have. Testing the headline example early is cheaper than finding out on demo day.
+
+---
+
 ## Day 2: table reference for the SQL agent (docs/TABLES.md)
 
 **Goal:** write down, from the real data, what each table and column means and how to query it correctly, so the SQL agent's prompt (Day 5) starts from facts instead of guesses.
