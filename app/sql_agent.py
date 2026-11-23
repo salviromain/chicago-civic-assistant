@@ -5,10 +5,8 @@ Guardrails enforced in code, not by the LLM:
 - Runs as the read-only `civic_reader` role (db/init.sql)
 - Row limit appended if missing; statement timeout set on the role
 
-Table descriptions to include in the prompt (data traps):
-- service_requests_311: exclude `duplicate = true` unless the user asks for all reports
-- `origin` values 'Generated In House' / 'Mass Entry' come from city operations, not residents
-- Filter request types on `sr_short_code`, not the long `sr_type` text
+Prompt schema: docs/TABLES.md (tables, columns, real values, data traps and
+example queries). Load it into the prompt rather than repeating it here.
 """
 
 import re

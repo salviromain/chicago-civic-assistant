@@ -12,6 +12,8 @@ Chosen on 2026-11-17. Downloads go in `data/` (git-ignored); this file records w
 
 Load with `python -m ingest.load_tables --since 2025-01-01`. Column lists were confirmed with `--check` on 2026-11-17; 311 and permits matched fully.
 
+**Loaded 2026-11-18**, data from 2025-01-01: 311 = 3,855,259 rows downloaded, **1,819,028 in Postgres**; violations = 90,738; permits = 60,420. The 311 types `311 INFORMATION ONLY CALL` and `Aircraft Noise Complaint` (2,036,231 rows) stay in the parquet file but are left out of Postgres to fit Neon's free 0.5 GB (total 356 MB). Column-by-column descriptions for the SQL agent: [`TABLES.md`](TABLES.md).
+
 ## Documents
 
 ### Municipal Code of Chicago (housing and buildings)

@@ -4,6 +4,51 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 2: table reference for the SQL agent (docs/TABLES.md)
+
+**Goal:** write down, from the real data, what each table and column means and how to query it correctly, so the SQL agent's prompt (Day 5) starts from facts instead of guesses.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `docs/TABLES.md` | New: for each table, what one row is, the row count and date range, every column (type, meaning, real values, % missing), traps, and example queries that were run on the database |
+| `docs/SOURCES.md` | Records the load date, row counts and the 311 exclusion |
+| `CLAUDE.md` | Points to `TABLES.md`; adds the traps found today; Day 2 marked done |
+| `app/sql_agent.py` | Docstring now points to `TABLES.md` instead of repeating a partial list of traps |
+
+### Step by step
+
+1. Queried every short-text column for its distinct values and counts (`SELECT col, count(*) ... GROUP BY col`), and the share of missing values for the columns that matter.
+2. Listed all 103 311 request types with their short code, department and duplicate rate. The agent needs exact names, because an enum column rejects a value that isn't in its list.
+3. Looked for traps and found new ones:
+   - **Heat violations cite the old number.** The violations data says "(13-196-410)"; no row cites 14X-8-803. So the agent filters on the old number but cites the new one.
+   - **An en dash in one permit type.** `PERMIT – EXPRESS PERMIT PROGRAM`, the biggest type (64% of permits), uses `–`; the others use `-`.
+   - **No heat type in 311.** None of the 103 types mentions heat.
+   - **Duplicate rates vary by type**, from 0% (abandoned vehicles) to 44% (open hydrants). Counting duplicates would distort comparisons.
+   - **`violation_status_date` is missing for 79% of rows**, so it can't measure time to fix.
+   - **12% of permits have no `permit_status`.**
+4. Checked a column meaning instead of assuming it: `processing_time` equals issue date minus application date on 60,419 of 60,420 permits.
+5. Ran every example query in `TABLES.md` as `civic_reader` and wrote its result next to it.
+
+### Check it yourself
+
+```bash
+docker compose up -d db
+```
+
+Open `docs/TABLES.md`, copy any example query into the PostgreSQL extension (connected as `civic_reader`), and compare with the result written under it. For instance, pothole complaints in ward 25 in 2026 should return 721.
+
+### Concepts
+
+- **Schema description for Text-to-SQL:** an LLM writing SQL only knows what the prompt tells it. Column names alone aren't enough: it also needs real values (`'Completed'`, not `'Closed'`), what a row means, and the rules a careful analyst would follow (drop duplicates, half-open date ranges).
+- **Grain:** what one row represents (one request, one violation, one permit). Getting it wrong leads to double counting, for example counting violations when the question is about inspections.
+- **Half-open date range:** `>= start AND < end`. It includes everything on the last day without having to write `23:59:59`.
+- **Median vs. average:** the median is the middle value, so a few extreme values don't drag it. `percentile_cont(0.5)` computes it in Postgres.
+- **En dash vs. hyphen:** `–` and `-` look almost the same but are different characters, so `=` treats them as different strings.
+
+---
+
 ## Table size check against Neon's free tier
 
 **Goal:** know, with one command, whether the data fits Neon's free 0.5 GB before we move the database there.
