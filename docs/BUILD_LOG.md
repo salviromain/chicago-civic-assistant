@@ -4,6 +4,41 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Table size check against Neon's free tier
+
+**Goal:** know, with one command, whether the data fits Neon's free 0.5 GB before we move the database there.
+
+### What changed
+
+| File | What it does |
+| --- | --- |
+| `scripts/table_sizes.py` | New: rows, data size, index size and total for each table; the sum against a 400 MB target and Neon's 500 MB limit; exits with an error if over the target |
+
+### Step by step
+
+1. Set the target at **400 MB**, not 500, to leave about 100 MB for the document chunks and their embeddings (Day 3 onward).
+2. Measured each table with Postgres's own size functions, indexes included, since Neon counts them too.
+3. Results along the way:
+
+| Load | 311 | Violations | Permits | Total |
+| --- | --- | --- | --- | --- |
+| Everything since 2025-01-01 | 951 MB | 36 MB | 26 MB | 1,013 MB |
+| Without info-only calls and aircraft noise | 460 MB | 36 MB | 26 MB | 522 MB |
+| Plus compact 311 columns (enums, smallint) | 295 MB | 36 MB | 25 MB | **356 MB** |
+
+### Check it yourself
+
+```bash
+python scripts/table_sizes.py    # prints the table above for your database; "OK: fits the target"
+```
+
+### Concepts
+
+- **Table size vs. index size:** `pg_table_size` is the rows themselves; `pg_indexes_size` is the indexes built on them; `pg_total_relation_size` is both. A single index on a 1.8M-row table can take 40 MB.
+- **Exit code:** a number a program returns when it ends; 0 means success. Returning 1 when over budget lets a script or CI job stop automatically.
+
+---
+
 ## Loader: full download since 2025-01-01, resumable, compact 311 table
 
 **Goal:** load every row since 2025-01-01 for all three tables (about 4M rows) without the download falling over, and store 311 compactly enough to fit Neon's free 0.5 GB.
