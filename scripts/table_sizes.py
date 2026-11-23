@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, text
 load_dotenv(find_dotenv(usecwd=True))  # read .env if present
 
 ADMIN_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/civic")
-TABLES = ["service_requests_311", "building_violations", "building_permits"]
+TABLES = ["service_requests_311", "building_violations", "building_permits", "doc_chunks"]
 NEON_LIMIT_MB = 500  # Neon free tier storage
 TARGET_MB = 400      # leaves ~100 MB for document chunks and embeddings
 

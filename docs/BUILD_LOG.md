@@ -4,6 +4,59 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 3: embeddings for every chunk, paced for Gemini's free tier
+
+**Goal:** give each of the 351 chunks an embedding, so Day 4 can search by meaning as well as by keyword.
+
+### What happened
+
+The first full run embedded 300 chunks, then failed on the last 51 with error **429 RESOURCE_EXHAUSTED**, even after five retries over about five minutes. The error names the limit: `EmbedContentTokensPerMinutePerProjectPerModel-FreeTier`, **30,000 tokens per minute**. The loader sent 50 chunks per request whatever their size. The last 51 are dense budget pages, so that one request was likely over 30,000 tokens by itself, and no amount of waiting could let it through. Every earlier batch also hit the limit and needed 2–3 retries.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `ingest/load_docs.py` | Requests are sized by estimated tokens (~8,000 each) instead of 50 chunks |
+| `ingest/load_docs.py` | A rolling one-minute budget (~18,000 estimated tokens) makes the loader wait *before* a request instead of after a refusal |
+| `ingest/load_docs.py` | A daily-quota error stops at once with a clear message (waiting minutes won't help); retry messages name the quota that was hit |
+| `scripts/table_sizes.py` | Counts `doc_chunks` too |
+| `tests/test_load_docs.py` | 3 new tests: batching by size, waiting for the minute budget, stopping on a daily quota |
+
+### Step by step
+
+1. Found the limit's name in the full error text (the first logs were cut short by `tail`, which also hid Python's real exit code).
+2. Rewrote the batching and pacing; the 300 cached embeddings were reused, so the rerun sent only the last 51 chunks: **3 requests, no refusals**.
+3. Ran the load again: **0 API calls**, everything from the cache.
+4. Sanity check: the six chunks closest in meaning to the heat rule (14X-8-802.2.2) are all heating or temperature sections. First is the workplace heat rule (802.3.2, similarity 0.953), then 802.2 (residential heating equipment) and 803.6 (cooling operation).
+5. Sizes: `doc_chunks` is 4.4 MB with both indexes; all tables 360.6 MB, under the 400 MB target.
+
+### Check it yourself
+
+```bash
+python -m ingest.load_docs      # "embeddings: 351 (0 API calls, the rest from cache)"
+python scripts/table_sizes.py   # doc_chunks 4.4 MB, total 360.6 MB
+pytest -q                       # 39 tests pass
+```
+
+```sql
+-- the chunks most similar in meaning to the heat rule
+SELECT b.id, round((1 - (b.embedding <=> a.embedding))::numeric, 3) AS similarity
+FROM doc_chunks a, doc_chunks b
+WHERE a.id = '14X-8-802.2.2' AND b.id <> a.id
+ORDER BY b.embedding <=> a.embedding LIMIT 6;
+```
+
+### Concepts
+
+- **Embedding:** a list of numbers (here 768) that captures what a text means; texts with similar meanings get similar lists. `gemini-embedding-001` normally returns 3,072 numbers; asking for 768 makes each vector 4 times smaller with little loss, and fits pgvector's index limit of 2,000.
+- **Cosine distance (`<=>`):** how far apart two embeddings point, from 0 (same direction, same meaning) to 2. Similarity = 1 − distance.
+- **HNSW index:** a graph that lets pgvector find the nearest embeddings without comparing the question with every row. With 351 rows it barely matters, but it's the standard setup.
+- **Rate limit vs. quota:** a rate limit caps use per minute and resets quickly, so waiting works. A daily quota resets once a day, so waiting minutes only wastes retries.
+- **Token budget pacing:** tracking what was sent in the last 60 seconds and pausing before going over. Cheaper than retrying, because refused requests can still count against limits.
+- **Exit code through a pipe:** in `python ... | tail`, the shell reports `tail`'s exit code, not Python's, so a crash can look like success.
+
+---
+
 ## Day 3: documents extracted, chunked and stored
 
 **Goal:** turn the three Municipal Code chapters and the 2027 proposed budget into small, searchable pieces in Postgres, each knowing where it came from (section number, page, title).
