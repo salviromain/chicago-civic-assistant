@@ -4,6 +4,71 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Loader: full download since 2025-01-01, resumable, compact 311 table
+
+**Goal:** load every row since 2025-01-01 for all three tables (about 4M rows) without the download falling over, and store 311 compactly enough to fit Neon's free 0.5 GB.
+
+### What happened
+
+The first full download failed three times, each in a new way:
+
+1. **A timeout at 100k rows.** The loader only retried HTTP error codes, so one slow answer crashed it and lost everything fetched so far.
+2. **Skipping rows got too slow.** By 1.8M rows, a 1,000-row request took over 5 minutes. Asking for "skip 1.8M rows, then give me 50k" (`$offset`) makes the portal walk past every skipped row.
+3. **A response cut off mid-way** (`ChunkedEncodingError`), a network error the retry didn't cover.
+
+Once complete, the 311 table took 951 MB in Postgres; info-only calls and aircraft noise complaints, 53% of the rows, were 2,036,231 of them.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `ingest/load_tables.py` | Retries every network error (timeouts, dropped and cut-off responses) with growing waits; a real request error like a bad column name still stops at once |
+| `ingest/load_tables.py` | **Keyset paging**: asks for "the next 50,000 rows after row id X" instead of `$offset` |
+| `ingest/load_tables.py` | Saves each page to `data/.pages/` as it arrives; rerunning the same command resumes. The folder is deleted when the table is complete |
+| `ingest/load_tables.py` | Writes to Postgres with **COPY** instead of `INSERT` |
+| `ingest/load_tables.py` | Leaves 311 info-only calls and aircraft noise complaints out of Postgres (kept in the parquet file). `--no-exclude` loads them |
+| `ingest/load_tables.py` | Compact 311 columns: `sr_type`, `sr_short_code`, `owner_department`, `status`, `origin` are **enums**; `ward` and `community_area` are `smallint` |
+| `ingest/load_tables.py` | Indexes after loading: each table's date column, 311 `sr_short_code`, permits `ward` |
+| `ingest/load_tables.py` | `--from-parquet` re-applies the column types, so files from older runs load correctly |
+| `tests/test_load_tables.py` | 8 new tests: exclusions, missing values for COPY, retries, resuming from saved pages, integer wards |
+
+### Step by step
+
+1. Tested the portal directly: 1,000 rows at offset 0 took 13 s, at offset 1.8M it timed out after 5 minutes. With keyset paging, 50,000 rows at the same point took 10 s.
+2. Switched to keyset paging and kept the 36 pages already downloaded (converted to the new page names, with the last row's id looked up from the portal).
+3. Finished the download: 3,855,259 rows of 311, 90,738 violations, 60,420 permits.
+4. Checked it: no `sr_number` appears twice, and the 3,851,773 rows of 311 created before the download day match the portal's own `count(*)` exactly, so no page was skipped or repeated.
+5. Measured (see the next entry for the script): 1,013 MB with everything, 522 MB with the two 311 types excluded. Still over the limit.
+6. Looked for the space: `sr_type` (27 bytes per row) and `owner_department` (26) repeat the same few values millions of times. Checked that every short code has exactly one type name; one code (DBES) has two departments, so a lookup table keyed by code would have lost data. Used enums instead, which keep every value.
+7. Reloaded from parquet in 18 s: 311 went from 460 MB to 295 MB; all three tables are 356 MB.
+
+### Check it yourself
+
+```bash
+docker compose up -d db
+python -m ingest.load_tables --from-parquet     # loads saved files (no download), about 30 s
+python scripts/table_sizes.py                   # 356 MB, OK
+pytest -q                                       # 23 tests pass
+```
+
+In the PostgreSQL extension or `psql`, as `civic_reader`:
+
+```sql
+SELECT count(*) FROM service_requests_311 WHERE sr_type = 'Pothole in Street Complaint' AND NOT duplicate;
+SELECT count(*) FROM service_requests_311 WHERE sr_type::text ILIKE '%rat%';   -- ILIKE needs ::text
+```
+
+### Concepts
+
+- **Offset paging vs. keyset paging:** offset says "skip N rows", and the server still has to step past all N, so pages get slower as N grows. Keyset says "rows after id X" and jumps straight there using the order, so every page costs the same.
+- **Resumable download:** saving each piece as it arrives means a failure costs one page, not the whole run. Writing to a `.tmp` file and then renaming it means a crash never leaves a half-written page behind.
+- **COPY:** Postgres's bulk-load command. Rows go over as one stream instead of one `INSERT` statement per batch; much faster, and it avoids the 65,535 parameter limit per statement.
+- **Enum type:** a column type with a fixed list of allowed values. Each row stores a 4-byte reference, not the text, but you still write `sr_type = 'Graffiti Removal Request'`. Two catches: `LIKE`/`ILIKE` need `sr_type::text`, and comparing with a value not in the list is an error rather than 0 rows.
+- **smallint:** a 2-byte whole number (up to 32,767), enough for wards (1 to 50) and community areas (1 to 77). The default `double precision` takes 8 bytes and shows `25.0`.
+- **Index:** a sorted lookup structure that makes filtering on a column fast, at the cost of disk space. The `ward` index on 311 took 39 MB, so it was dropped; a full scan of 1.8M rows is still quick.
+
+---
+
 ## CLAUDE.md: project memory for Claude Code
 
 **Goal:** every new Claude Code session starts out knowing what this project is, how the machine is set up, and the rules to follow, without being told again.
