@@ -40,6 +40,17 @@ The heat rule also has season details beyond "68°F day / 66°F night" (for exam
 
 **Trap worth an eval question:** a *proposed* budget is not the *adopted* budget. In 2026, the Council passed its own alternative to the Mayor's proposal. Answers from the 2027 book should say "proposed".
 
+### Loaded (2026-11-23)
+
+`python -m ingest.load_docs` stores them in the `doc_chunks` table: **351 chunks**, each with a 768-number Gemini embedding and a full-text index (4.4 MB).
+
+| File | Contents (checked) | Chunks |
+| --- | --- | --- |
+| `14X-8.pdf` | The whole chapter, 4 pages: 801 General, 802 Heating, 803 Cooling, 804 Mechanical equipment, 805 Ducts, 806 Fuel gas piping | 28, one per subsection (e.g. `14X-8-802.2.2`) |
+| `5-12.pdf` | RLTO, 5-12-010 to 5-12-200. **The file also contains all of Chapter 5-16**; the loader ignores it there and reads it from `5-16.pdf` | 35 (five long sections split into parts, e.g. `5-12-110#1`) |
+| `5-16.pdf` | 5-16-010 to 5-16-080 (020 and 040 are "Reserved" and skipped) | 6 |
+| `2027-budget-overview.pdf` | 216 pages; columns say "2027 Proposed". Pages 3–214 printed; PDF page = printed page + 1 | 282, ~500 tokens each, never crossing a page |
+
 ## Not used (yet)
 
 - City Council ordinances (eLMS): out of scope for the 2-week build

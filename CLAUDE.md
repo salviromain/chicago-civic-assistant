@@ -20,7 +20,7 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 - Postgres + pgvector in Docker: `docker compose up -d db`. Verify with `.venv/bin/python scripts/check_db.py`.
 - Settings in `.env`, loaded with python-dotenv via `load_dotenv(find_dotenv(usecwd=True))`. See `.env.example`.
 - DB driver is **psycopg 3** (`import psycopg`), not psycopg2.
-- LLM is the **Gemini free tier**: cache LLM calls and keep eval runs small.
+- LLM is the **Gemini free tier**: cache LLM calls and keep eval runs small. Embeddings are limited to 30,000 tokens per minute; `ingest/load_docs.py` paces requests and caches every embedding in `data/cache/embeddings/`.
 
 ## Rules
 
@@ -49,8 +49,8 @@ Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 mak
 
 - Day 1, setup and scope: done.
 - Day 2, load the tables (from 2025-01-01) + `docs/TABLES.md`: done. Tables total 356 MB (`scripts/table_sizes.py`).
-- **Day 3 (next), load the documents:** extract text from the code chapters and the budget PDF; chunk by section, keeping the section number and title on each chunk; embed and store in pgvector, with a full-text index next to it.
-- Day 4, search: embedding search and keyword search functions, merged with RRF (hybrid); try 10 questions by hand.
+- Day 3, load the documents: done. `doc_chunks` has 351 chunks (code: one per section, id = section number; budget: ~500 tokens per page), Gemini embeddings (768 numbers) and a full-text index.
+- **Day 4 (next), search:** embedding search and keyword search functions, merged with RRF (hybrid); try 10 questions by hand. Keyword search must match *any* word (`websearch_to_tsquery` requires all of them); embed questions with `task_type="RETRIEVAL_QUERY"`.
 - Day 5, SQL agent: table descriptions (`docs/TABLES.md`) + few-shot examples in the prompt; guardrails (SELECT-only check, read-only role, row limit).
 - Day 6, router and answer: router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
 - Day 7, FastAPI: `POST /query`, `GET /health`; Pydantic request/response (answer, route, citations, latency, cost). Milestone: question in through the API, cited answer out.

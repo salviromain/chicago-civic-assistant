@@ -4,6 +4,36 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 3 done: documents recorded in SOURCES.md and CLAUDE.md
+
+**Goal:** write down what each document file actually contains and how it was loaded, and move the plan to Day 4.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `docs/SOURCES.md` | New "Loaded" table: what each PDF contains (checked from its text) and how many chunks it gives |
+| `CLAUDE.md` | Day 3 marked done; Day 4 next, with the two lessons it needs (keyword search must match any word; embed questions as `RETRIEVAL_QUERY`); embedding limit and cache noted under Environment |
+
+### Step by step
+
+1. Recorded the surprises found while reading the files: `5-12.pdf` also contains Chapter 5-16, and `14X-8.pdf` is the complete chapter (4 pages long, but sections 801 to 806 are all there).
+2. Updated the build plan in `CLAUDE.md`.
+
+### Check it yourself
+
+Read the "Loaded" table in `docs/SOURCES.md`, then compare it with:
+
+```sql
+SELECT doc, count(*) FROM doc_chunks GROUP BY doc;
+```
+
+### Concepts
+
+- **Task type for embeddings:** Gemini embeds a stored passage (`RETRIEVAL_DOCUMENT`) slightly differently from a search question (`RETRIEVAL_QUERY`), so questions and the passages that answer them land close together.
+
+---
+
 ## Day 3: embeddings for every chunk, paced for Gemini's free tier
 
 **Goal:** give each of the 351 chunks an embedding, so Day 4 can search by meaning as well as by keyword.
