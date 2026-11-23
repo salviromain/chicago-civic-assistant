@@ -4,6 +4,45 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Correction: the heat rule is 14X-8-802.2.2, not 14X-8-803
+
+**Goal:** fix a wrong section number before it reaches the prompts and the eval set.
+
+### What happened
+
+Earlier entries (Day 1, the CLAUDE.md entry and the TABLES.md entry) say the current heat rule is **14X-8-803**. Checked against the downloaded chapter `data/docs/code/14X-8.pdf`, the minimum heat landlords must provide is in **14X-8-802.2.2**; **14X-8-803 is the cooling rule**. Those entries are left as written, since this log records what was done at the time; this entry corrects them. The old number 13-196-410 is still right as the *old* number, and the violations data still cites it.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Heat rule trap now says 14X-8-802.2.2, and that 14X-8-803 is cooling |
+| `docs/SOURCES.md` | 14X-8 row and the "trap worth an eval question" note now cite 14X-8-802.2.2 |
+| `docs/TABLES.md` | Heat violation trap: cite 14X-8-802.2.2 in answers (this file goes into the SQL agent's prompt) |
+| `app/schemas.py` | The example citation in the API docs is now `Municipal Code 14X-8-802.2.2` |
+| `evals/questions.jsonl` | New question q004: "Which code section sets the minimum heat landlords must provide?", answer 14X-8-802.2.2, route docs |
+
+### Step by step
+
+1. Searched the repo for every mention of 14X-8-80x and 13-196-410.
+2. Fixed the files that describe the project today; kept the old build log entries unchanged.
+3. Added q004 so the eval set catches this exact mistake: a model citing from memory is likely to say 14X-8-803 or 13-196-410; only retrieval from the real chapter gives 14X-8-802.2.2.
+
+### Check it yourself
+
+```bash
+grep -rn "14X-8-803" CLAUDE.md docs/SOURCES.md docs/TABLES.md app/   # only "803 is cooling" notes remain
+tail -1 evals/questions.jsonl                                        # q004
+pytest -q
+```
+
+### Concepts
+
+- **Subsection number:** in `14X-8-802.2.2`, `14X` is the title, `8` the chapter, `802` the section, and `.2.2` the subsection inside it. Citations should point to the most specific part that supports the claim.
+- **Correcting a log instead of rewriting it:** a build log is a history. Adding a correction keeps the record honest about what was believed when, and still points readers to the right answer.
+
+---
+
 ## CLAUDE.md: the full 2-week build plan
 
 **Goal:** every Claude Code session knows what each day of the plan covers and which day is next, instead of having to ask.

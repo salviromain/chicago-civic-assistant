@@ -37,7 +37,7 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 - **311 info-only calls and aircraft noise are not loaded** (space): refuse those questions.
 - **311 enum columns** (`sr_type`, `sr_short_code`, `owner_department`, `status`, `origin`): `ILIKE` needs `::text`; an unknown value is an error.
 - **building_violations has no ward column.** Ward questions can't be answered from it.
-- **Heat rule** is **14X-8-803**, not the old 13-196-410. The violations data still cites 13-196-410: filter on the old number, cite the new one.
+- **Heat rule** is **14X-8-802.2.2** (14X-8-803 is cooling), not the old 13-196-410. The violations data still cites 13-196-410: filter on the old number, cite 14X-8-802.2.2.
 - **Permit type `PERMIT – EXPRESS PERMIT PROGRAM` uses an en dash**; the others a hyphen.
 - **The 2027 budget is proposed, not adopted.** Say so in answers.
 

@@ -219,7 +219,7 @@ Violations written by Department of Buildings inspectors. **One row = one violat
 
 - **No `ward` or `community_area` column.** "Violations in ward 25" can't be answered from this table: say so. Don't join to 311 or permits by address to guess a ward.
 - **A violation is a historical record, not the building's current condition.** `OPEN` means not yet marked complied in this data; it doesn't prove the problem still exists. Answers about a building should say "violations recorded since 2025" and give the dates.
-- **Old ordinance numbers.** `violation_ordinance` uses the old Building Code numbering. **Heat violations cite `13-196-410`** ("Heat dwelling unit adequately from September 15th to June 1st"); no row cites the current `14X-8-803`. To *find* heat violations, filter `violation_ordinance LIKE '%(13-196-410)%'` (1,251 rows mention heat in the description). In the *answer*, cite the current rule, **14X-8-803**, and note the data uses the old number.
+- **Old ordinance numbers.** `violation_ordinance` uses the old Building Code numbering. **Heat violations cite `13-196-410`** ("Heat dwelling unit adequately from September 15th to June 1st"); no row cites the current `14X-8-802.2.2`. To *find* heat violations, filter `violation_ordinance LIKE '%(13-196-410)%'` (1,251 rows mention heat in the description). In the *answer*, cite the current rule, **14X-8-802.2.2**, and note the data uses the old number. (14X-8-803 is the cooling rule, not heat.)
 - **Text columns are plain text** (not enums), stored in upper case: compare with `=` on exact upper-case values, or use `ILIKE`.
 
 ### Examples

@@ -22,12 +22,12 @@ Source: [American Legal Publishing](https://codelibrary.amlegal.com/codes/chicag
 
 | Chapter | Why it's in scope | Save as |
 | --- | --- | --- |
-| **14X-8** Mechanical (Minimum Requirements for Existing Buildings) | The Heat Ordinance: 14X-8-802 / 14X-8-803. Minimum indoor temperatures and the heating season | `14X-8.pdf` |
+| **14X-8** Mechanical (Minimum Requirements for Existing Buildings) | The Heat Ordinance: **14X-8-802.2.2** sets the minimum heat landlords must provide (14X-8-803 is cooling). Minimum indoor temperatures and the heating season | `14X-8.pdf` |
 | **5-12** Residential Landlord and Tenant Ordinance (RLTO) | Landlord and tenant duties; tenant remedies, including for no heat (5-12-110) | `5-12.pdf` |
 | **5-16** Disclosure of Utility Costs to Tenants | Heating cost disclosure for individually metered units | `5-16.pdf` |
 | Optional: **14X-3** General / property maintenance | Broader "is this a violation?" questions | `14X-3.pdf` |
 
-**Trap worth an eval question:** many websites still cite the heat rule as **13-196-410**, an older section number. The city now cites **14X-8-803**. Good answers cite the current section; the old number is a known way for a model to cite from memory instead of from retrieval.
+**Trap worth an eval question:** many websites still cite the heat rule as **13-196-410**, an older section number. The current section is **14X-8-802.2.2** (verified in `14X-8.pdf`; 14X-8-803 is about cooling, not heat). Good answers cite the current section; the old number is a known way for a model to cite from memory instead of from retrieval.
 
 The heat rule also has season details beyond "68°F day / 66°F night" (for example, different requirements early and late in the heating season). That makes it good material for faithfulness checks.
 
