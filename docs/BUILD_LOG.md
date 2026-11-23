@@ -4,6 +4,74 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 3: documents extracted, chunked and stored
+
+**Goal:** turn the three Municipal Code chapters and the 2027 proposed budget into small, searchable pieces in Postgres, each knowing where it came from (section number, page, title).
+
+### What happened
+
+Read the extracted text of every PDF before writing the chunker, and found five problems:
+
+1. **The code PDFs open with a table of contents** that repeats every section heading. Headings in it have three spaces after the number; real headings have one.
+2. **Section numbers at the start of wrapped lines.** Lines like `5-12-110(a), the tenant shall recover...` look like headings but are the end of a sentence.
+3. **`5-12.pdf` also contains all of Chapter 5-16.** Without a stop, those pages were glued onto 5-12-200 (Severability).
+4. **"68ºF" became "68oF".** The PDFs use the masculine ordinal sign `º`, not the degree sign `°`, and Unicode clean-up turns `º` into the letter o.
+5. **Budget tables fall apart in plain text**: all the row labels come first, then all the numbers. PyMuPDF's table reader mangled the numbers too (`$3956M` for `$395.6M`).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `ingest/load_docs.py` | New: extract → chunk → (embed) → store. `--dry-run` prints stats only; `--no-embed` stores chunks without embeddings |
+| `app/config.py` | `embedding_dims = 768` |
+| `requirements.txt` | Adds `pymupdf` (PDF text extraction; license AGPL, fine for an open-source repo) |
+| `tests/test_load_docs.py` | 13 tests: section ids, parents, wrapped references, degree sign, second chapter, long sections, packing and overlap, table rows, budget headings, embedding cache |
+
+### How the chunks are made
+
+- **Code: one chunk per numbered section.** The chunk id is the section number (`14X-8-802.2.2`), the same id eval q004 expects. Each chunk starts with its parent sections (`14X-8-802 Heating systems > 14X-8-802.2 Residential occupancies > 14X-8-802.2.2 Heat to be provided`), so a short subsection still says what it's about. Sections over ~800 tokens are split into parts at paragraph breaks (`5-12-110#1` … `#5`). Repealed ("Reserved") sections are skipped.
+- **Budget: about 500 tokens per chunk, within one page.** Chunks never cross a page, so every citation has an exact page number; consecutive chunks overlap by ~50 tokens. Each chunk starts with `2027 Budget Overview (proposed), page 150, Program and Budget Summaries by Department > Community Services`, built from the budget's own table of contents (printed page = PDF page − 1).
+- **Budget tables:** paragraphs are kept as PyMuPDF text blocks. Inside the areas PyMuPDF detects as tables, rows are rebuilt from word positions (same height = same row; wide gap = new column), giving `Library Fund | 1,033 | 90,544,346 | 1,033 | 99,795,421`.
+
+Result: **351 chunks**, about 116k tokens. 14X-8 has 28, 5-12 has 35, 5-16 has 6 and the budget has 282.
+
+### Step by step
+
+1. Dumped all four PDFs to text and read them; confirmed 14X-8.pdf contains 802.2.2 (heat) and 803 (cooling), and that the budget's columns say "2027 Proposed".
+2. Wrote the chunkers against the real layouts, then fixed problems 3 and 4 after inspecting the output.
+3. Stored the chunks with `--no-embed` and tested keyword search as `civic_reader`.
+
+### Check it yourself
+
+```bash
+python -m ingest.load_docs --dry-run        # chunk counts per document, ~40 s
+python -m ingest.load_docs --no-embed       # stores 351 chunks
+pytest -q                                   # 36 tests pass
+```
+
+```sql
+SELECT text FROM doc_chunks WHERE id = '14X-8-802.2.2';     -- the heat rule, 68°F / 66°F
+SELECT id, ts_rank(tsv, q) FROM doc_chunks, websearch_to_tsquery('english', 'minimum heat temperature') q
+WHERE tsv @@ q ORDER BY 2 DESC;                             -- 802.3.2 (workplaces), then 802.2.2
+```
+
+### Known limits (for Day 4 and Day 11)
+
+- `websearch_to_tsquery` requires **every** word: "minimum heat temperature landlord" finds nothing, because the code says "owner". Day 4's keyword search should match any word and rank.
+- The workplace heat rule (802.3.2) outranks the residential one (802.2.2) on keywords alone: a job for the reranker.
+- Infographic pages ("Where the Money Goes") keep their amounts but can separate them from their labels. Empty table cells collapse, so a column can shift (`Corporate Fund | 5,000,000 | 0`).
+
+### Concepts
+
+- **Chunk:** one small piece of a document, stored with where it came from. Small enough to search precisely and to fit several into a prompt.
+- **Chunking by section vs. fixed size:** sections follow the document's own structure, so a chunk is one complete rule. Fixed size works for anything, but can cut a rule in two. Day 10 compares both.
+- **Overlap:** repeating the end of one chunk at the start of the next, so a fact on a boundary appears whole in at least one chunk.
+- **Full-text search (`tsvector`):** Postgres breaks text into normalized words (**stemming**: "provided" → `provid`), stores them in a `tsvector` column with a **GIN index**, and matches queries against them. `ts_rank` scores matches. It's the keyword half of hybrid search.
+- **Generated column:** `tsv` is computed by Postgres from other columns and kept up to date automatically.
+- **Unicode normalization (NFKC):** rewrites look-alike characters into standard ones (`ﬀ` → `ff`). Useful, but it can change meaning, as with `º` → `o`.
+
+---
+
 ## No-heat 311 question becomes a refusal test
 
 **Goal:** stop the eval set and the API docs from assuming data we don't have. 311 has no heat complaint type (checked across all 105 types in the full download).

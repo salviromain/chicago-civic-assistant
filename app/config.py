@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Model choices (compare Flash vs Pro in the evals)
     llm_model: str = "gemini-2.5-flash"
     embedding_model: str = "gemini-embedding-001"
+    embedding_dims: int = 768  # shortened from 3072: 4x smaller, fits pgvector's HNSW index
 
     # Guardrails and retrieval knobs
     sql_row_limit: int = 500
