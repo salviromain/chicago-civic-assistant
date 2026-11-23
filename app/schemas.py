@@ -13,7 +13,7 @@ class Route(str, Enum):
 
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=1000,
-                          examples=["How many no-heat complaints were filed in Ward 25 last winter?"])
+                          examples=["How many heat violations were recorded last winter, and what does the city code require landlords to provide?"])
 
 
 class Citation(BaseModel):

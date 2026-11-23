@@ -1,4 +1,4 @@
-{"id": "q001", "question": "How many no-heat complaints were filed in Ward 25 between November 2025 and February 2026, excluding duplicates?", "route": "sql", "reference_sql": "TODO", "reference_answer": "TODO", "source_chunks": [], "answerable": true}
+{"id": "q001", "question": "How many no-heat complaints were filed in Ward 25 between November 2025 and February 2026, excluding duplicates?", "route": "sql", "reference_sql": null, "reference_answer": null, "source_chunks": [], "answerable": false}
 {"id": "q002", "question": "What minimum indoor temperature does the city code require landlords to maintain during the day?", "route": "docs", "reference_sql": null, "reference_answer": "TODO", "source_chunks": ["TODO"], "answerable": true}
 {"id": "q003", "question": "How many 311 complaints will Ward 25 get next winter?", "route": "sql", "reference_sql": null, "reference_answer": null, "source_chunks": [], "answerable": false}
 {"id": "q004", "question": "Which code section sets the minimum heat landlords must provide?", "route": "docs", "reference_sql": null, "reference_answer": "14X-8-802.2.2", "source_chunks": ["14X-8-802.2.2"], "answerable": true}

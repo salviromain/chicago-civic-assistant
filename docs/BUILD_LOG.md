@@ -4,6 +4,37 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## No-heat 311 question becomes a refusal test
+
+**Goal:** stop the eval set and the API docs from assuming data we don't have. 311 has no heat complaint type (checked across all 105 types in the full download).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/questions.jsonl` | q001 ("How many no-heat complaints were filed in Ward 25 ... ?") is now `answerable: false`; the reference SQL and answer placeholders are cleared |
+| `app/schemas.py` | The sample question in the API docs is now "How many heat violations were recorded last winter, and what does the city code require landlords to provide?" |
+
+### Step by step
+
+1. Kept q001's wording and route (`sql`): the router should still send it to the SQL side, which should then refuse because no 311 type covers heat.
+2. Replaced the sample question with one the data can answer: a count from `building_violations` (heat violations, filtered on the old number 13-196-410) plus the rule from the Municipal Code (14X-8-802.2.2). It's a "both" question, like the plan's original example.
+
+### Check it yourself
+
+```bash
+head -1 evals/questions.jsonl     # q001 ... "answerable": false
+pytest -q
+```
+
+Run the API and open `http://localhost:8000/docs`: the `/query` example shows the new question.
+
+### Concepts
+
+- **Unanswerable eval question:** a question with no correct answer in the data, used to measure the **correct refusal rate**. A system that answers it with a number is guessing. A plausible question that the data can't answer is the best test, because a model is tempted to make up a number.
+
+---
+
 ## Correction: the heat rule is 14X-8-802.2.2, not 14X-8-803
 
 **Goal:** fix a wrong section number before it reaches the prompts and the eval set.
