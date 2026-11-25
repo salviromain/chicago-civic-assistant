@@ -4,6 +4,37 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Embeddings move to app/embeddings.py
+
+**Goal:** let search (Day 4) embed questions with the same cache and rate-limit handling as the document loader, without the app importing from the ingest scripts.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/embeddings.py` | New: the embedding code from `ingest/load_docs.py` (cache, batching by tokens, per-minute pacing, retries), plus `embed_query()` for questions (`task_type="RETRIEVAL_QUERY"`) |
+| `ingest/load_docs.py` | Imports `embed_texts` and `approx_tokens` from `app/embeddings.py`; extraction and chunking unchanged |
+| `tests/test_embeddings.py` | The 5 embedding tests, moved from `tests/test_load_docs.py` |
+
+### Step by step
+
+1. Moved the functions as they were.
+2. Checked that nothing changed: all 39 tests pass, and `python -m ingest.load_docs` still reports **0 API calls**, so the cache keys are identical.
+
+### Check it yourself
+
+```bash
+python -m ingest.load_docs     # "embeddings: 351 (0 API calls, the rest from cache)"
+pytest -q                      # 39 tests pass
+```
+
+### Concepts
+
+- **Refactor:** changing where or how code is written without changing what it does. Check it the same way: same tests, same output (here, the same cache hits).
+- **Dependency direction:** `app/` is the service that gets deployed; `ingest/` holds one-off loading scripts. Shared code lives in `app/`, and scripts import from it, not the other way round, so the deployed service doesn't depend on scripts it never runs.
+
+---
+
 ## Day 3 done: documents recorded in SOURCES.md and CLAUDE.md
 
 **Goal:** write down what each document file actually contains and how it was loaded, and move the plan to Day 4.
