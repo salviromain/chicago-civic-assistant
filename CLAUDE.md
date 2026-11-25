@@ -5,7 +5,7 @@
 **Chicago Civic Data Assistant**: a FastAPI service that answers questions about Chicago. A router sends each question to one or both of:
 
 - **Text-to-SQL** over Chicago Data Portal tables: 311 service requests, building violations, building permits.
-- **Hybrid RAG** (pgvector + BM25 + reranker) over Municipal Code chapters 14X-8, 5-12, 5-16 and the 2027 proposed budget.
+- **Hybrid RAG** (pgvector + BM25, merged with RRF; reranker optional) over Municipal Code chapters 14X-8, 5-12, 5-16 and the 2027 proposed budget.
 
 Answers must cite their sources and refuse when the data doesn't support an answer.
 
@@ -50,8 +50,8 @@ Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 mak
 - Day 1, setup and scope: done.
 - Day 2, load the tables (from 2025-01-01) + `docs/TABLES.md`: done. Tables total 356 MB (`scripts/table_sizes.py`).
 - Day 3, load the documents: done. `doc_chunks` has 351 chunks (code: one per section, id = section number; budget: ~500 tokens per page), Gemini embeddings (768 numbers) and a full-text index.
-- **Day 4 (next), search:** embedding search and keyword search functions, merged with RRF (hybrid); try 10 questions by hand. Keyword search must match *any* word (`websearch_to_tsquery` requires all of them); embed questions with `task_type="RETRIEVAL_QUERY"`.
-- Day 5, SQL agent: table descriptions (`docs/TABLES.md`) + few-shot examples in the prompt; guardrails (SELECT-only check, read-only role, row limit).
+- Day 4, search: done. `app/retrieval.search(question, mode, rerank)`: vector + real BM25 + exact section lookup, merged with RRF. On 10 hand-checked questions (`python -m scripts.try_search`): hybrid 10/10 in the top 5, MRR 0.88. The bge-reranker-base cross-encoder lowered MRR to 0.62, so `use_reranker = False`; Day 10 compares rerankers on the full eval set.
+- **Day 5 (next), SQL agent:** table descriptions (`docs/TABLES.md`) + few-shot examples in the prompt; guardrails (SELECT-only check, read-only role, row limit).
 - Day 6, router and answer: router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
 - Day 7, FastAPI: `POST /query`, `GET /health`; Pydantic request/response (answer, route, citations, latency, cost). Milestone: question in through the API, cited answer out.
 

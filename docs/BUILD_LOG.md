@@ -4,6 +4,26 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 4 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with what search actually does.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Project line: the reranker is optional. Build plan: Day 4 done, with its results and the reranker decision; Day 5 (SQL agent) next |
+
+### Check it yourself
+
+Read the "Build plan" section of `CLAUDE.md`; the numbers match the results table in the previous entry.
+
+### Concepts
+
+- **Keeping docs true:** a briefing that still says "reranker → top 5" after the reranker was turned off would send the next session (or reader) in the wrong direction. Update it in the same breath as the decision.
+
+---
+
 ## Day 4: hybrid search (vector + BM25, merged with RRF), tried on 10 questions
 
 **Goal:** given a question, return the 5 document chunks most likely to answer it, with their sources, and check by hand that the right ones come back.
