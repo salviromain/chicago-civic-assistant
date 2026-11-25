@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     sql_row_limit: int = 500
     retrieval_top_k: int = 20
     rerank_top_k: int = 5
+    reranker_model: str = "BAAI/bge-reranker-base"  # local cross-encoder, runs on CPU
+    # Off by default: on the 10 Day 4 questions it lowered MRR from 0.88 to 0.62
+    # (docs/BUILD_LOG.md). Day 10 compares rerankers on the full eval set.
+    use_reranker: bool = False
 
 
 @lru_cache

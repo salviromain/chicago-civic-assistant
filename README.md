@@ -9,9 +9,9 @@ Ask questions about Chicago in plain English. The service decides whether to ans
 ```
 question ─► FastAPI /query ─► Router (LLM): SQL, documents, or both?
                                  │                      │
-                         SQL agent (read-only)   Hybrid search (pgvector + BM25)
+                         SQL agent (read-only)   Hybrid search (pgvector + BM25, RRF)
                                  │                      │
-                         Postgres tables          Reranker → top 5 chunks
+                         Postgres tables          top 5 chunks (reranker: optional)
                                  └──────► LLM writes a cited answer ◄──┘
 ```
 

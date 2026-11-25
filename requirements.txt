@@ -11,6 +11,7 @@ pandas>=2.2
 pyarrow>=16.0
 google-genai>=1.0
 pymupdf>=1.24
+sentence-transformers>=3.0  # reranker (brings PyTorch)
 
 # dev / test
 pytest>=8.0

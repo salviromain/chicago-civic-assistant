@@ -4,6 +4,83 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 4: hybrid search (vector + BM25, merged with RRF), tried on 10 questions
+
+**Goal:** given a question, return the 5 document chunks most likely to answer it, with their sources, and check by hand that the right ones come back.
+
+### What happened
+
+- **Postgres's keyword ranking isn't BM25.** Matching any word of "What minimum heat must my landlord provide?" with `ts_rank` ranked long landlord–tenant sections first (they repeat "landlord", which is in 36 chunks; "minimum" is in only 6). The heat rule wasn't in the top 5. With real BM25 it comes **first**.
+- **The reranker made results worse**, so it's off by default:
+  - On the 10 questions it pushed the right chunk down: MRR 0.88 → 0.59.
+  - It ranked the *workplace* heat rule first for "my apartment", and lost the library budget page entirely.
+  - Two causes. Every budget chunk starts with the same label ("2027 Budget Overview (proposed), page …"), which matches any budget question, so it scored nearly all of them 0.99+. And 11 of the 20 candidates are longer than its 512-token limit, so their endings were cut off.
+  - Dropping the shared label helped only a little (MRR 0.62). It still misreads the code sections.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/retrieval.py` | `search(question, mode, rerank)`: vector search (pgvector), BM25 over Postgres's stemmed words, exact lookup of section numbers named in the question, merged with RRF; optional cross-encoder reranker. Connects as `civic_reader` |
+| `app/config.py` | `reranker_model = "BAAI/bge-reranker-base"`, `use_reranker = False` |
+| `scripts/try_search.py` | The 10 hand-tried questions; prints each mode's top 5 and a summary |
+| `requirements.txt` | `sentence-transformers` (for the reranker; brings PyTorch) |
+| `tests/test_retrieval.py` | 12 tests: tsvector parsing, BM25 (rare words count more, long chunks don't win by repetition), section numbers, RRF, search wiring, reranker off by default |
+| `README.md` | Diagram: reranker marked optional |
+
+### How search works
+
+1. **Vector search:** embed the question (`RETRIEVAL_QUERY`, cached), take the 50 nearest chunks by cosine distance.
+2. **BM25:** Postgres stems the question with the same rules as the chunks (`to_tsvector`); Python scores all 351 chunks with BM25 and keeps the top 50. The index is built once per process, in milliseconds.
+3. **Exact section lookup:** a number like `5-12-150` or `14X-8-803.6` in the question fetches that section directly; it's always among the candidates.
+4. **RRF** merges the lists; the top 20 are candidates; the top 5 are returned. With `rerank=True`, the cross-encoder reorders the 20 first.
+
+Each result says where it came from (`vector_rank`, `bm25_rank`, `exact_section`, `rrf_score`, `rerank_score`), which will help when reading eval failures.
+
+### Results on the 10 questions
+
+The expected chunks for the budget questions were chosen by searching the chunk text for the figures *before* running any search.
+
+| Mode | Hits in top 5 | MRR | Median time |
+| --- | --- | --- | --- |
+| Vector only | 9/10 | 0.90 | 0.03 s (cached question) |
+| BM25 only | 9/10 | 0.52 | 0.02 s |
+| **Hybrid (default)** | **10/10** | **0.88** | 0.03 s |
+| Hybrid + reranker | 10/10 | 0.62 | 0.92 s |
+
+- **Vector misses** the total budget question: "$17.6 billion" is on an infographic page whose text is scattered.
+- **BM25 misses** the air conditioning question: the code says "cooling and dehumidification equipment", never "air conditioning". Classic vocabulary mismatch.
+- **Hybrid catches both**, because a chunk only needs to rank well in one list.
+- The exact section lookup makes "What does section 5-12-150 say?" first in every mode.
+
+10 questions is a small sample: these numbers show the direction, not the final result. Day 9 measures on ~80 questions.
+
+### Check it yourself
+
+```bash
+python -m scripts.try_search           # every question's top 5 in each mode, then the table
+python -m scripts.try_search --quiet   # just the table
+pytest -q                              # 51 tests pass
+```
+
+```python
+from app.retrieval import search
+for r in search("What minimum heat must my landlord provide?"):
+    print(r["id"], r["vector_rank"], r["bm25_rank"])
+```
+
+### Concepts
+
+- **BM25:** the standard keyword-ranking formula. For each question word in a chunk, it multiplies how rare the word is (**IDF**, inverse document frequency) by how often it appears (with diminishing returns), then adjusts for chunk length. Postgres's `ts_rank` counts frequency but has no IDF.
+- **Stemming:** reducing words to a common root (`provided`, `provides` → `provid`) so different forms match.
+- **Reciprocal Rank Fusion (RRF):** merges ranked lists by giving each item `1 / (60 + position)` per list and adding them up. It uses positions only, so it can combine scores that aren't comparable (cosine distance vs. BM25).
+- **Vocabulary mismatch:** the question and the source use different words for the same thing ("air conditioning" vs. "cooling equipment"). Embeddings handle it; keyword search can't.
+- **Cross-encoder reranker:** a model that reads the question and a chunk *together* and scores the pair. It's usually more accurate than comparing two separate embeddings, but slower, and only as good as its training. This one (`bge-reranker-base`) wasn't good at Chicago's legal text.
+- **MRR (mean reciprocal rank):** the average of 1 / position of the first correct chunk (first = 1, second = 0.5). It rewards putting the right chunk at the top, not just somewhere in the top 5.
+- **Overfitting to a small test:** tuning until 10 questions look good can make the system worse on everything else. Hence one principled fix, then a decision, with the real comparison left for the full eval set.
+
+---
+
 ## Embeddings move to app/embeddings.py
 
 **Goal:** let search (Day 4) embed questions with the same cache and rate-limit handling as the document loader, without the app importing from the ingest scripts.
