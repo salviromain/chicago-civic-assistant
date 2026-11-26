@@ -26,6 +26,8 @@ def _plain(value):
         return int(value) if value == value.to_integral_value() else float(value)
     if isinstance(value, (dt.datetime, dt.date)):
         return value.isoformat()
+    if isinstance(value, float) and value.is_integer():
+        return int(value)  # permits store ward as 42.0; say "ward 42"
     if isinstance(value, dt.timedelta):
         return round(value.total_seconds() / 86400, 2)  # as days
     return value

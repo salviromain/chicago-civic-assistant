@@ -11,6 +11,43 @@ Database: Postgres 16. The agent connects as the read-only `civic_reader` role (
 3. **Return counts and aggregates, not raw rows,** unless the question asks for a list. Always `LIMIT` lists (50 or fewer).
 4. **Say what you filtered.** The answer must mention filters that change the meaning: duplicates removed, city-generated requests removed, a date range.
 5. **Refuse what the tables can't answer** (see "Not in these tables" at the end) instead of guessing.
+6. **Data ends 2026-11-18** (311) and 2026-11-17 (violations, permits). Write dates as literals (`'2026-01-01'`), never `CURRENT_DATE` or `now()`: "today" is given with the question. If the period asked about runs past the end of the data, say so in the notes; if it lies entirely after it, refuse.
+
+## Matching values and text
+
+Checked on every value of every category column, and on the free-text columns (2026-11-25).
+
+- **Request types: use codes, never word matches.** When a question names a category, take *every* matching type from the list below and name the codes in the notes:
+  - signs = `PCE`, `PCB`, `PCC`, `PCD` (the 4 "Sign Repair Request" types);
+  - trees = `SEF`, `SEL`, `SEC`, `SEE`, `SED`;
+  - rats = `SGA` only;
+  - street lights = `SFD`, `SFK`, `SFQ`, `SFN`;
+  - potholes = `PHF` (Pothole in Street Complaint) only. Add `PHB` (Alley Pothole Complaint) only when the question mentions alleys.
+- **Why not `ILIKE`:** a word inside another word matches too. On `sr_type`:
+
+  | `ILIKE` | Also matches |
+  | --- | --- |
+  | `'%tree%'` | S**tree**t … (potholes, street lights, street cleaning) |
+  | `'%rat%'` | Inacc**urat**e Fuel Pump, Inacc**urat**e Retail Scales |
+  | `'%sign%'` | Traffic **Sign**al Out |
+  | `'%cab%'` | **Cab**le TV |
+  | `'%pet%'` | **Pet**coke Dust |
+  | `'%cart%'` | Push**cart** Food Vendor |
+  | `'%air%'` | Sign Rep**air** … |
+  | `'%ice%'` | Submerged … Dev**ice** |
+
+- **Non-ASCII characters in values:** `Snow – Uncleared Sidewalk Complaint` (`SWSNOREM`) uses an en dash, like the express permit type; `Sidewalk Café/Outdoor Dining Complaint` (`CAFE`) has an accented é, so `'%cafe%'` finds nothing. Use the codes.
+- **Free-text columns** (`work_description`, `violation_description`, `violation_inspector_comments`): match words at the **start of a word** with a regular expression, `work_description ~* '\msolar'` (`\m` = start of a word; it still matches "solar" and "solar-powered"). Not `ILIKE '%…%'`:
+
+  | Search on `building_permits.work_description` | `ILIKE '%…%'` | `~* '\m…'` |
+  | --- | --- | --- |
+  | rat | 10,578 (ope**rat**e, alte**rat**ion, deco**rat**ive …) | 91 |
+  | tree | 207 | 23 |
+  | heat | 742 | 694 |
+
+  On `violation_description`, `'%roof%'` also matches "fire**proof**" (943 vs 724).
+- **Quotes inside values are doubled** in SQL: `origin = 'Alderman''s Office'` (97,111 rows), `'Mayor''s Office'`, `'City Clerk''s Office'`.
+- **Addresses:** `building_violations.address` and the permit street parts are all upper case, but 2,576 `service_requests_311.street_address` values aren't. Compare with `upper(street_address) = upper('6800 s dorchester ave')`, and upper-case addresses given in lower case for the other tables.
 
 ---
 
@@ -42,12 +79,12 @@ Database: Postgres 16. The agent connects as the read-only `civic_reader` role (
 
 - **Duplicates.** Several people report the same pothole; the city marks the extra reports `duplicate = true`. **Add `AND NOT duplicate` by default**, so counts mean "distinct problems". Include duplicates only if the question asks about reports, calls or duplicates. Duplicate rates differ a lot by type: 38% of pothole requests, 44% of open hydrant requests, 0% of abandoned vehicles. So leaving them in distorts comparisons between types.
 - **City-generated requests.** `origin` `'Mass Entry'` (144,774 rows) and `'Generated In House'` (8,619) are created by city staff, not reported by residents.
-  - **Keep them by default.** "How many pothole complaints / tree requests" counts every request of that type. The word "complaint" alone doesn't mean residents: many types are named "… Complaint".
+  - **Keep them by default.** "How many pothole complaints / sign repair requests / tree requests" counts every request of that type, whoever entered it. The words "complaint" and "request" don't mean residents: many types are named "… Complaint" or "… Request".
   - **Exclude them only when the question is about residents** ("what do residents report", "where do residents complain most"): add `AND origin NOT IN ('Generated In House', 'Mass Entry')` and say so in the notes.
 - **Enum columns** (`sr_type`, `sr_short_code`, `owner_department`, `status`, `origin`):
   - `=` and `IN` work with text, but **a value that isn't in the list is an error**, not 0 rows. Use only values from this file.
   - `LIKE` / `ILIKE` need a cast: `sr_type::text ILIKE '%tree%'`.
-- **Prefer `sr_short_code`** to `sr_type`: shorter, indexed, no typos. Pick the codes from the table below rather than matching words: `sr_type::text ILIKE '%tree%'` also matches "S**tree**t …" types (potholes, street lights), 202,905 rows in 2025 instead of 123,441 for the 5 tree types. Tree trim requests (`SEF`) are labelled "NO LONGER BEING ACCEPTED" but still have 76,064 rows in the period.
+- **Prefer `sr_short_code`** to `sr_type`: shorter, indexed, no typos. Pick the codes from the table below rather than matching words (see "Matching values and text"): `sr_type::text ILIKE '%tree%'` gives 202,905 rows in 2025 instead of 123,441 for the 5 tree types. Tree trim requests (`SEF`) are labelled "NO LONGER BEING ACCEPTED" but still have 76,064 rows in the period.
 - **Time to close:** `closed_date - created_date` is an interval; days = `extract(epoch FROM closed_date - created_date) / 86400`. Use only `status = 'Completed'`. Prefer the median (`percentile_cont(0.5) WITHIN GROUP (ORDER BY ...)`): a few slow requests pull the average up. One row has `closed_date` before `created_date`.
 
 ### Values
@@ -222,7 +259,10 @@ Violations written by Department of Buildings inspectors. **One row = one violat
 - **No `ward` or `community_area` column.** "Violations in ward 25" can't be answered from this table: say so. Don't join to 311 or permits by address to guess a ward.
 - **A violation is a historical record, not the building's current condition.** `OPEN` means not yet marked complied in this data; it doesn't prove the problem still exists. Answers about a building should say "violations recorded since 2025" and give the dates.
 - **Old ordinance numbers.** `violation_ordinance` uses the old Building Code numbering. **Heat violations cite `13-196-410`** ("Heat dwelling unit adequately from September 15th to June 1st"); no row cites the current `14X-8-802.2.2`. To *find* heat violations, filter `violation_ordinance LIKE '%(13-196-410)%'` (1,251 rows mention heat in the description). In the *answer*, cite the current rule, **14X-8-802.2.2**, and note the data uses the old number. (14X-8-803 is the cooling rule, not heat.)
-- **Text columns are plain text** (not enums), stored in upper case: compare with `=` on exact upper-case values, or use `ILIKE`.
+- **Text columns are plain text** (not enums), stored in upper case: compare with `=` on exact upper-case values, or match words with `~* '\m…'`.
+- **`violation_description` is cut off at 30 characters** (20,550 rows are exactly 30 long, e.g. `NOTIFY DOB,  USE OF VACANT LND`) and has double spaces and runs of `*`. Search `violation_ordinance` (the full requirement) or `violation_code` instead when you can.
+- **210 different old ordinance numbers** are cited. Only one has been matched to the current code: heat, `13-196-410` → **14X-8-802.2.2**. The hot water rule (`13-196-430`, "minimum temperature of 120 degrees F", 263 rows) is **not** in the loaded code chapters. In answers, give the number the data cites and don't name a current section unless it's listed here.
+- **No air conditioning:** 311 type `NAC` (1,032 rows) is the cooling complaint; the cooling rule is 14X-8-803.
 
 ### Examples
 
@@ -260,7 +300,7 @@ Building permits issued by the Department of Buildings. **One row = one permit.*
 | `work_description` | text | Free-text description of the work | Search with `ILIKE` |
 | `reported_cost` | double precision | Cost reported by the applicant, dollars | NULL in 13.7%, 0 in 2.5%; median $15,507; max $730M |
 | `total_fee` | double precision | Permit fees, dollars | |
-| `community_area` | double precision | Community area number | Whole numbers stored as decimals |
+| `community_area` | double precision | Community area number | Whole numbers stored as decimals. 6 rows have 0 (not a real area) |
 | `ward` | double precision | Ward, 1 to 50 | Indexed. NULL in 0.8%. `ward = 25` works |
 | `latitude`, `longitude` | double precision | Location | |
 
@@ -297,7 +337,8 @@ FROM building_permits GROUP BY review_type ORDER BY median_days DESC;
 Refuse, and say what's missing:
 
 - Anything before 2025-01-01.
-- 311 information-only calls and aircraft noise complaints (not loaded).
+- 311 information-only calls and aircraft noise complaints (not loaded). **No other 311 type is about noise**, so refuse noise questions.
+- Anything after the end of the data (2026-11-18 for 311, 2026-11-17 for the others).
 - Violations by ward or community area (no such column).
 - Community area or ward **names** and boundaries, population, per-capita rates (no reference tables yet).
 - Whether a building's problem is fixed *now* (violations are records of inspections).
