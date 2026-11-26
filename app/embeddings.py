@@ -14,7 +14,9 @@ import re
 import time
 from pathlib import Path
 
-CACHE_DIR = Path("data/cache/embeddings")
+from app.config import PROJECT_ROOT
+
+CACHE_DIR = PROJECT_ROOT / "data" / "cache" / "embeddings"
 
 # Gemini free tier: 30,000 input tokens per minute for embeddings
 # (quota EmbedContentTokensPerMinutePerProjectPerModel-FreeTier). Our token

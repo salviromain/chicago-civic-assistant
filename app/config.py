@@ -1,12 +1,16 @@
 """Settings read from environment variables (or a local .env file)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The repo folder, so .env and data/ are found wherever the app is started from
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/civic"
     readonly_database_url: str = "postgresql://civic_reader:change-me@localhost:5432/civic"
@@ -15,6 +19,7 @@ class Settings(BaseSettings):
 
     # Model choices (compare Flash vs Pro in the evals)
     llm_model: str = "gemini-3.1-flash-lite"  # 2.5 retired for new keys; 3.8/3.5 Flash took 268 s / 23 s on the free tier
+    sql_thinking_level: str | None = None  # Gemini 3 thinking for the SQL agent: None, minimal, low, medium, high
     llm_requests_per_minute: int = 8  # free tier allows 10 for Flash; stay under
     embedding_model: str = "gemini-embedding-001"
     embedding_dims: int = 768  # shortened from 3072: 4x smaller, fits pgvector's HNSW index

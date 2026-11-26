@@ -4,6 +4,44 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Audit (2/5): the Gemini wrapper: check before caching, faster retries, fixed paths, thread lock, thinking level
+
+**Goal:** fix the ways the LLM plumbing could fail quietly or slowly.
+
+### What happened
+
+- **Bad replies were cached.** The wrapper wrote a reply to the cache *before* checking it. A cut-off or empty reply would have been stored, and every re-run would fail on it until someone deleted the file.
+- **Server errors waited too long.** Gemini returned several **503** errors (server busy) during the audit. Retrying after 10, 20 and 40 s pushed the 95th-percentile time per question to 23–36 s. A 503 is usually brief, so it's now retried after 2, 4 and 8 s. Rate limits (429) keep the long waits.
+- **Paths depended on the folder the app was started from.** `.env`, `data/cache/llm` and `data/cache/embeddings` were relative paths. Started from another folder, the app would miss the API key and use an empty cache. They're now anchored to the project folder. Checked: started from `/tmp`, it found the key and the cached replies (0 API calls).
+- **The request pacer wasn't thread-safe.** FastAPI (Day 7) answers requests in parallel threads; two at once could both pass the per-minute check. It now takes a lock.
+- **Thinking level:** Gemini 3 models take `thinking_level` (minimal, low, medium, high) instead of a token budget. Added, so the SQL agent can be compared with and without thinking (entry 4/5).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/llm.py` | Validate (non-empty, matches the schema) before caching; 5xx retried after 2/4/8 s; `threading.Lock` around pacing; `thinking_level`; cache path from `PROJECT_ROOT` |
+| `app/config.py` | `PROJECT_ROOT`; `.env` read from the project folder; `sql_thinking_level = None` |
+| `app/embeddings.py` | Cache path from `PROJECT_ROOT` |
+| `tests/test_llm.py` | Cut-off JSON isn't cached and the next call succeeds; an empty reply is an error; the cache path is absolute |
+
+The cache key only includes `thinking_level` when it's set, so every existing cached reply is still found.
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_llm.py
+cd /tmp && /path/to/project/.venv/bin/python -c "import sys; sys.path.insert(0, '/path/to/project'); from app.config import get_settings; print(bool(get_settings().gemini_api_key))"
+```
+
+### Concepts
+
+- **503 vs. 429:** 503 means "the server is busy right now"; 429 means "you've sent too many requests". The first passes in seconds, the second needs waiting out the quota window.
+- **Race condition:** two threads read "1 request left this minute" at the same moment and both go ahead. A **lock** lets only one thread check-and-update at a time.
+- **Validate before you cache:** a cache makes a result permanent, so only store results you've checked.
+
+---
+
 ## Audit (1/5): the guard catches every parser error, and blocks sequence functions
 
 **Goal:** fix the two guard gaps found by attacking it before Day 6.

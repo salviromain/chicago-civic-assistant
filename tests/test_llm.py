@@ -87,3 +87,23 @@ def test_bad_request_is_not_retried(tmp_path):
     with pytest.raises(errors.ClientError):
         ask(tmp_path, client)
     assert len(client.calls) == 1
+
+
+def test_bad_reply_is_not_cached(tmp_path):
+    from pydantic import ValidationError
+    client = FakeClient(['{"count": "lots"', '{"count": 3}'])  # cut-off JSON, then a good reply
+    with pytest.raises(ValidationError):
+        ask(tmp_path, client, schema=Answer)
+    assert list(tmp_path.iterdir()) == []
+    assert ask(tmp_path, client, schema=Answer).parsed == Answer(count=3)
+
+
+def test_empty_reply_is_an_error_not_a_cache_entry(tmp_path):
+    with pytest.raises(RuntimeError, match="empty reply"):
+        ask(tmp_path, FakeClient([""]))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cache_is_in_the_project_folder():
+    from app.config import PROJECT_ROOT
+    assert llm.CACHE_DIR == PROJECT_ROOT / "data" / "cache" / "llm" and llm.CACHE_DIR.is_absolute()

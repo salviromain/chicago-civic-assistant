@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,7 +25,9 @@ from pydantic import BaseModel
 
 from app.embeddings import MinuteBudget, _quota_id
 
-CACHE_DIR = Path("data/cache/llm")
+from app.config import PROJECT_ROOT
+
+CACHE_DIR = PROJECT_ROOT / "data" / "cache" / "llm"
 
 
 class QuotaExhausted(RuntimeError):
@@ -44,13 +47,17 @@ class LLMResult:
 
 
 def cache_key(model: str, system: str | None, prompt: str, schema: type[BaseModel] | None,
-              temperature: float, thinking_budget: int | None) -> str:
+              temperature: float, thinking_budget: int | None, thinking_level: str | None = None) -> str:
     schema_json = json.dumps(schema.model_json_schema(), sort_keys=True) if schema else ""
-    raw = json.dumps([model, system or "", prompt, schema_json, temperature, thinking_budget])
+    parts = [model, system or "", prompt, schema_json, temperature, thinking_budget]
+    if thinking_level:  # only when set, so older cache entries keep their keys
+        parts.append(thinking_level)
+    raw = json.dumps(parts)
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
 _budget: MinuteBudget | None = None
+_budget_lock = threading.Lock()  # the API (Day 7) handles requests in parallel threads
 
 
 def _minute_budget() -> MinuteBudget:
@@ -87,21 +94,24 @@ def _call_with_retry(client, model: str, prompt: str, config, attempts: int = 5)
                 raise QuotaExhausted(f"daily Gemini quota reached ({quota}); cached answers still work")
             if attempt == attempts - 1:
                 raise
-            wait = min(2 ** attempt * 10, 60)
+            # A rate limit needs real waiting; a 5xx is usually a brief hiccup
+            wait = min(2 ** attempt * 10, 60) if e.code == 429 else min(2 ** attempt * 2, 16)
             print(f"  Gemini {e.code} ({quota}), retrying in {wait}s", flush=True)
             time.sleep(wait)
 
 
 def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] | None = None,
              model: str | None = None, temperature: float = 0.0,
-             thinking_budget: int | None = None, cache_dir: Path = CACHE_DIR,
+             thinking_budget: int | None = None, thinking_level: str | None = None,
+             cache_dir: Path = CACHE_DIR,
              client=None, budget: MinuteBudget | None = None) -> LLMResult:
     """Ask Gemini. With `schema`, the reply must be JSON of that shape (structured
-    output) and comes back parsed. thinking_budget: None = the model decides,
-    0 = no thinking (faster), N = at most N thinking tokens."""
+    output) and comes back parsed. Thinking (hidden reasoning before the answer):
+    thinking_level "minimal" | "low" | "medium" | "high" for Gemini 3 models, or
+    thinking_budget N tokens for 2.5 models; None = the model's default."""
     from app.config import get_settings
     model = model or get_settings().llm_model
-    key = cache_key(model, system, prompt, schema, temperature, thinking_budget)
+    key = cache_key(model, system, prompt, schema, temperature, thinking_budget, thinking_level)
     f = cache_dir / f"{key}.json"
 
     if f.exists():
@@ -113,9 +123,11 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
             system_instruction=system, temperature=temperature,
             response_mime_type="application/json" if schema else None,
             response_schema=schema,
-            thinking_config=(types.ThinkingConfig(thinking_budget=thinking_budget)
-                             if thinking_budget is not None else None))
-        (budget or _minute_budget()).wait_for(1)
+            thinking_config=(types.ThinkingConfig(thinking_budget=thinking_budget,
+                                                  thinking_level=thinking_level)
+                             if thinking_budget is not None or thinking_level else None))
+        with _budget_lock:
+            (budget or _minute_budget()).wait_for(1)
         start = time.perf_counter()
         response = _call_with_retry(client or _client(), model, prompt, config)
         usage = response.usage_metadata
@@ -125,6 +137,12 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
             output_tokens=(usage and usage.candidates_token_count) or 0,
             thinking_tokens=(usage and usage.thoughts_token_count) or 0,
             latency_ms=round((time.perf_counter() - start) * 1000))
+        # Check the reply before caching it: a cut-off or empty reply must not be
+        # stored, or every re-run would fail on it
+        if not result.text.strip():
+            raise RuntimeError(f"{model} returned an empty reply")
+        if schema:
+            schema.model_validate_json(result.text)
         cache_dir.mkdir(parents=True, exist_ok=True)
         tmp = f.with_suffix(".tmp")
         tmp.write_text(json.dumps({k: getattr(result, k) for k in
