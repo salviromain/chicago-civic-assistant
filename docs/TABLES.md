@@ -41,11 +41,13 @@ Database: Postgres 16. The agent connects as the read-only `civic_reader` role (
 ### 311 traps
 
 - **Duplicates.** Several people report the same pothole; the city marks the extra reports `duplicate = true`. **Add `AND NOT duplicate` by default**, so counts mean "distinct problems". Include duplicates only if the question asks about reports, calls or duplicates. Duplicate rates differ a lot by type: 38% of pothole requests, 44% of open hydrant requests, 0% of abandoned vehicles. So leaving them in distorts comparisons between types.
-- **City-generated requests.** `origin` `'Mass Entry'` (144,774 rows) and `'Generated In House'` (8,619) are created by city staff, not reported by residents. **For questions about what residents report or complain about, add `AND origin NOT IN ('Generated In House', 'Mass Entry')`.** Keep them for questions about the city's workload.
+- **City-generated requests.** `origin` `'Mass Entry'` (144,774 rows) and `'Generated In House'` (8,619) are created by city staff, not reported by residents.
+  - **Keep them by default.** "How many pothole complaints / tree requests" counts every request of that type. The word "complaint" alone doesn't mean residents: many types are named "… Complaint".
+  - **Exclude them only when the question is about residents** ("what do residents report", "where do residents complain most"): add `AND origin NOT IN ('Generated In House', 'Mass Entry')` and say so in the notes.
 - **Enum columns** (`sr_type`, `sr_short_code`, `owner_department`, `status`, `origin`):
   - `=` and `IN` work with text, but **a value that isn't in the list is an error**, not 0 rows. Use only values from this file.
   - `LIKE` / `ILIKE` need a cast: `sr_type::text ILIKE '%tree%'`.
-- **Prefer `sr_short_code`** to `sr_type`: shorter, indexed, no typos. Tree trim requests (`SEF`) are labelled "NO LONGER BEING ACCEPTED" but still have 76,064 rows in the period.
+- **Prefer `sr_short_code`** to `sr_type`: shorter, indexed, no typos. Pick the codes from the table below rather than matching words: `sr_type::text ILIKE '%tree%'` also matches "S**tree**t …" types (potholes, street lights), 202,905 rows in 2025 instead of 123,441 for the 5 tree types. Tree trim requests (`SEF`) are labelled "NO LONGER BEING ACCEPTED" but still have 76,064 rows in the period.
 - **Time to close:** `closed_date - created_date` is an interval; days = `extract(epoch FROM closed_date - created_date) / 86400`. Use only `status = 'Completed'`. Prefer the median (`percentile_cont(0.5) WITHIN GROUP (ORDER BY ...)`): a few slow requests pull the average up. One row has `closed_date` before `created_date`.
 
 ### Values
@@ -184,7 +186,7 @@ WHERE sr_short_code = 'SGA' AND NOT duplicate AND status = 'Completed'
   AND created_date >= '2026-01-01'
 GROUP BY 1 ORDER BY 1;
 
--- Which wards report the most graffiti? (residents only)
+-- In which wards do residents report the most graffiti? (residents only)
 SELECT ward, count(*) AS requests FROM service_requests_311
 WHERE sr_short_code = 'GRAF' AND NOT duplicate AND ward IS NOT NULL
   AND origin NOT IN ('Generated In House', 'Mass Entry')

@@ -4,6 +4,69 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 5 (3/3): the SQL agent, checked on 16 questions against the real database
+
+**Goal:** turn a question into a safe SQL query, run it, and return the rows with the filters the answer must mention, or refuse when the tables can't answer.
+
+### What happened
+
+- **First run: 14/16, no repairs needed.** It got the en dash, the old heat ordinance, duplicates and all 6 refusals right. Both failures had one cause: it removed city-generated requests from "pothole complaints" (718 instead of 721) and "tree-related requests" (80,528 instead of 123,441).
+- **The cause was my reference, not the model.** `docs/TABLES.md` said to exclude city-generated requests "for questions about what residents report or **complain** about". But many 311 types are *named* "… Complaint", so the rule was ambiguous. Fixed: keep them by default; exclude them only when the question is about *residents*. The graffiti example and question now say "residents".
+- **Second run: 16/16.** These 16 questions shaped that fix, so they're a check, not a score: the honest number comes from the Day 8 eval set.
+- **Repair, tried for real:** given a broken first query, Gemini fixed both enum traps from the real Postgres error in one try: `sr_short_code = 'POTHOLE'` (*invalid input value for enum*) and `sr_type ILIKE` without `::text` (*operator does not exist*). Both repaired queries return 35,832, the hand-computed count.
+- **New trap found** while computing the expected answers: `sr_type::text ILIKE '%tree%'` also matches "S**tree**t …" types (potholes, street lights): 202,905 rows in 2025 instead of 123,441. Added to TABLES.md. The agent had picked the 5 tree codes correctly anyway.
+- **Notes can be wrong.** In the first run, the open-rats note said "reported by residents" though the SQL had no such filter. In the second run every note matched its SQL. Day 6: cite the SQL itself, so a reader can check the notes.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_agent.py` | `query_tables(question, today)` → `SqlResult` (sql, columns, rows, notes, refusal_reason, error, attempts, tokens, latency). System prompt = rules + 5 refusal examples + all of `docs/TABLES.md` |
+| `docs/TABLES.md` | City-generated rule made precise (keep by default); "Street" contains "tree" trap |
+| `scripts/try_sql.py` | 16 questions with hand-computed answers (10 to answer, 6 to refuse); prints SQL, rows and notes; summary |
+| `tests/test_sql_agent.py` | 7 tests with a fake LLM and database: SQL is checked before it runs, refusals never touch the database, one repair then stop, database down isn't "repaired" |
+
+### Step by step
+
+1. **Prompt:** the system prompt is the rules, five refusal examples and the whole of `docs/TABLES.md` (~8,000 tokens; its example queries are the **few-shot** examples). The question comes with today's date, so "last winter" has a meaning.
+2. **Structured output:** Gemini returns a `SqlPlan`: `approach` (written first, so it thinks about tables and traps before the SQL), `answerable`, `sql`, `notes`, `refusal_reason`.
+3. **Refusal:** if `answerable` is false, stop. The database is never touched.
+4. **Guard and run:** `check_sql` (Day 5, 2/3), then `run_select` as `civic_reader`.
+5. **One repair:** if the guard or Postgres rejects the query with an error a better query could fix, the question, the failed SQL and the error go back to Gemini once. Which errors count is decided by the Postgres error code (**SQLSTATE**): `42…` (syntax, unknown column, missing cast), `22…` (bad value, e.g. an unknown enum value), `57014` (timeout). A connection failure is raised instead: no query can fix it.
+
+### Results
+
+| Run | Correct | Repairs | Median time per question (uncached) | Median tokens |
+| --- | --- | --- | --- | --- |
+| First (ambiguous rule) | 14/16 | 0 | 1.8 s | 8,474 |
+| After the rule fix | **16/16** | 0 | 1.3 s | 8,636 |
+| Re-run | 16/16 | 0 | cached (0 API calls) | |
+
+Model: `gemini-3.1-flash-lite`, temperature 0.
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m scripts.try_sql            # SQL, rows and notes for each question (cached: instant)
+.venv/bin/python -m scripts.try_sql --quiet
+.venv/bin/python -c "
+from dotenv import load_dotenv; load_dotenv()
+from app.sql_agent import query_tables
+r = query_tables('How many rat complaints were made in ward 1 in 2026?')
+print(r.sql); print(r.rows, r.notes)"
+```
+
+Compare any answer with your own query: `docker compose exec db psql -U civic_reader -d civic`.
+
+### Concepts
+
+- **Text-to-SQL:** an LLM writes the database query instead of a person. It works when the model sees the real schema, real values and the traps, which is what `docs/TABLES.md` is for.
+- **Few-shot examples:** a handful of solved examples (question → SQL) in the prompt. The model copies their patterns: half-open date ranges, `NOT duplicate`, `sr_short_code`.
+- **Self-repair:** feeding a database error back to the model so it can fix its own query. Limited to one try, so a confused model can't loop.
+- **SQLSTATE:** the five-character code Postgres attaches to every error (`42703` = unknown column). The first two characters give the class of error.
+
+---
+
 ## Day 5 (2/3): SQL guardrails with a real parser, and a read-only executor
 
 **Goal:** make sure SQL written by the LLM can only read, only from the three city tables, and only a bounded number of rows, before the agent itself exists.
