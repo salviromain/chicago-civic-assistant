@@ -36,9 +36,11 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 - **311 origin:** `'Generated In House'` and `'Mass Entry'` requests are city-generated. Keep them by default; exclude them only when the question is about residents ("complaint" alone doesn't count: many types are named "… Complaint").
 - **311 info-only calls and aircraft noise are not loaded** (space): refuse those questions.
 - **311 enum columns** (`sr_type`, `sr_short_code`, `owner_department`, `status`, `origin`): `ILIKE` needs `::text`; an unknown value is an error.
+- **Match codes, not words:** `ILIKE '%tree%'` also matches "Street", `'%rat%'` "Inaccurate", `'%sign%'` "Signal". Use `sr_short_code` lists, and `~* '\mword'` (word start) on free text. Full list: `docs/TABLES.md`, "Matching values and text".
 - **building_violations has no ward column.** Ward questions can't be answered from it.
-- **Heat rule** is **14X-8-802.2.2** (14X-8-803 is cooling), not the old 13-196-410. The violations data still cites 13-196-410: filter on the old number, cite 14X-8-802.2.2.
-- **Permit type `PERMIT – EXPRESS PERMIT PROGRAM` uses an en dash**; the others a hyphen.
+- **Heat rule** is **14X-8-802.2.2** (14X-8-803 is cooling), not the old 13-196-410. The violations data still cites 13-196-410: filter on the old number, cite 14X-8-802.2.2. It's the only old number mapped (`OLD_SECTIONS` in `app/retrieval.py`); violations cite 210. Don't name a current section for the others unless checked (hot water, 13-196-430, isn't in the loaded chapters).
+- **En dashes:** permit type `PERMIT – EXPRESS PERMIT PROGRAM` and 311 type `Snow – Uncleared Sidewalk Complaint`; the others a hyphen. `Café` has an accent.
+- **Data ends 2026-11-18** (311) / 2026-11-17: the SQL agent adds a code-written note when a period runs past it.
 - **The 2027 budget is proposed, not adopted.** Say so in answers.
 
 ## Build plan
@@ -51,7 +53,7 @@ Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 mak
 - Day 2, load the tables (from 2025-01-01) + `docs/TABLES.md`: done. Tables total 356 MB (`scripts/table_sizes.py`).
 - Day 3, load the documents: done. `doc_chunks` has 351 chunks (code: one per section, id = section number; budget: ~500 tokens per page), Gemini embeddings (768 numbers) and a full-text index.
 - Day 4, search: done. `app/retrieval.search(question, mode, rerank)`: vector + real BM25 + exact section lookup, merged with RRF. On 10 hand-checked questions (`python -m scripts.try_search`): hybrid 10/10 in the top 5, MRR 0.88. The bge-reranker-base cross-encoder lowered MRR to 0.62, so `use_reranker = False`; Day 10 compares rerankers on the full eval set.
-- Day 5, SQL agent: done. `app/sql_agent.query_tables(question)`: prompt = `docs/TABLES.md` + refusal examples, structured `SqlPlan`, one repair on a fixable Postgres error. Guardrails: `app/sql_guard.check_sql` (sqlglot: one SELECT, the 3 tables, row limit), civic_reader, READ ONLY transaction, 15 s timeout (`app/db.py`). `python -m scripts.try_sql`: 16/16 (first run 14/16, fixed by making the city-generated rule precise), median 1.3 s.
+- Day 5, SQL agent: done. `app/sql_agent.query_tables(question)`: prompt = `docs/TABLES.md` + refusal examples, structured `SqlPlan`, one repair on a fixable Postgres error. Guardrails: `app/sql_guard.check_sql` (sqlglot: one SELECT, the 3 tables, row limit), civic_reader, READ ONLY transaction, 15 s timeout (`app/db.py`). `python -m scripts.try_sql`: 33/33 (16 + 17 harder trap questions from the Day 5 audit), stable on two uncached runs, median 2.5 s. Known risks for later days: the latest "Audit (5/5)" entry in `docs/BUILD_LOG.md`.
 - **Day 6 (next), router and answer:** router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
 - Day 7, FastAPI: `POST /query`, `GET /health`; Pydantic request/response (answer, route, citations, latency, cost). Milestone: question in through the API, cited answer out.
 

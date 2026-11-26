@@ -4,6 +4,58 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Audit (5/5): what can still go wrong, and which day handles it
+
+**Goal:** record the risks found in the audit that aren't fixed yet, so each later day picks them up. `CLAUDE.md` gets the new data traps.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Data traps: match codes not words; old ordinance numbers (only heat mapped); en dashes and é; data end dates. Day 5 line: 33/33 and a pointer to this list |
+
+### Risks still open
+
+**Day 6 (router and answer)**
+- **Off-topic document questions** ("How do I get a dog license?") still return 5 chunks: similarity can't separate them (Audit 3/5). The answer prompt must refuse when the chunks don't answer.
+- **Trust code over the model:** cite the SQL itself; prefer `data_notes` (code-checked) to `notes` (LLM-written, once wrong in testing).
+- **Zero rows** means "none recorded in this data since 2025", not "none exist". Violations are inspection records, not a building's current condition.
+- **Result size:** up to 500 rows of every column could reach the answer prompt. Send a capped preview (first rows, long text cut) plus the row count.
+- **Old ordinance numbers:** cite the number the data gives; name a current section only if it's in `OLD_SECTIONS`.
+- **The 2027 budget is proposed**, not adopted; a "2025 adopted police budget" question scored 0.74 similarity to the 2027 budget chunks and must be refused.
+
+**Day 7 (API)**
+- **Failures need clear errors, not a 500:** database down (`OperationalError`), daily quota used up (`QuotaExhausted`), or a reply that doesn't match the schema (`ValidationError`). Map them to 503 with a message.
+- **Retries block the request:** a rate-limit retry can wait up to 60 s inside a request. Give each request a time budget.
+
+**Day 8 (eval set)**
+- Write *new* questions: the 33 in `try_sql` shaped the prompt, so scoring on them would overstate accuracy.
+- `q002` still has `TODO` as its answer and source.
+
+**Day 10 (experiments)**
+- **Temperature:** Google's guidance for Gemini 3 is to keep the default temperature (1.0). We use 0 so that cached runs and evals repeat; no looping or odd output in 66 uncached runs, but compare.
+- **Thinking:** no thinking vs. `low` was 33/33 both; check again on the full eval set.
+
+**Day 12–13 (production, Neon)**
+- **Stale after a reload:** `docs/TABLES.md` counts and value lists, the BM25 index (built once per process) and `data_end_dates()` (cached per process). Reloading data means restarting the app and re-checking TABLES.md.
+- **New enum values** after a reload (a new 311 type) would be errors until the reference lists them.
+- **One connection per query:** fine locally; on Neon a cold start can add a second or more. Consider a small connection pool.
+- **Free-tier daily quota:** count API calls per day and stop eval runs before the limit.
+
+**Not fixed, by design**
+- The guard allows any function not on the blocklist; the role and read-only transaction are the backstop (they refused every write sent straight to Postgres).
+- `generate_series` and `unnest` are the only functions allowed in `FROM`.
+
+### Check it yourself
+
+Read "Data traps" in `CLAUDE.md`; each item matches an entry in Audit (1/5) to (4/5).
+
+### Concepts
+
+- **Risk register:** a list of known problems with an owner and a deadline (here: a day of the plan). It turns "we noticed that" into "we'll handle that on Day 7".
+
+---
+
 ## Audit (4/5): every street/tree-style trap in the data, fixed in the reference and checked on 33 questions
 
 **Goal:** find every data trap like "`'%tree%'` matches Street", not just that one, and make the SQL agent handle them.
