@@ -65,7 +65,12 @@ SYSTEM = """You answer questions about Chicago using ONLY the sources given (tab
 - Building violations cite the old ordinance number 13-196-410 for heat; the current rule
   is 14X-8-802.2.2. Don't name current sections for other old numbers.
 - If the sources don't answer the question, set refused=true and say briefly what's missing.
-  If they answer only part of it, answer that part and say what's missing.
+  If the question asks for one specific fact (a number, a temperature, a date, a name) and the
+  sources don't state it, that's a refusal too, even if they contain related information.
+  If a question has several parts and the sources answer only some, answer those and say
+  what's missing.
+- Write numbers as people do: thousands separators, and round days and percentages to one
+  decimal (6.99 days -> about 7.0 days; a share of 0.3671 -> 36.7%).
 - Be brief: 1 to 4 sentences, plain language. Not legal advice; don't add disclaimers.
 """
 
@@ -94,7 +99,21 @@ class Trace:
 # Sources -> prompt text
 
 
+def _number(value) -> str:
+    """Numbers as a person writes them: 42462228.9200002 -> 42,462,228.92;
+    6.985706 -> 6.99; 0.75834 -> 0.7583 (shares keep 4 significant digits)."""
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, int):
+        return f"{value:,}"
+    if abs(value) < 1:
+        return f"{value:.4g}"
+    return f"{value:,.2f}".rstrip("0").rstrip(".")
+
+
 def _cell(value) -> str:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return _number(value)
     text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
     return text if len(text) <= CELL_CHARS else text[:CELL_CHARS] + "…"
 

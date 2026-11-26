@@ -4,6 +4,49 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (3/5): tidy numbers, and refuse when the specific fact asked for is missing
+
+**Goal:** fix failure groups 3 and 4 in the answer step.
+
+### Group 3: unrounded numbers (q011, q033)
+
+The answer model copied numbers as Postgres returned them: "6.985706018518519 days", "42462228.9200002". The table result shown to the model is now formatted by code:
+
+| Value | Shown as |
+| --- | --- |
+| `42462228.9200002` | `42,462,228.92` |
+| `6.985706018518519` | `6.99` |
+| `5443` | `5,443` |
+| `0.75834` (a share) | `0.7583` (4 significant digits, so 75.8% survives) |
+| `3.0` | `3` |
+
+The prompt adds: thousands separators; days and percentages to one decimal.
+
+### Group 4: partial answers to an unanswerable question (q084)
+
+"What minimum hot water temperature must landlords provide?" The loaded chapters don't state it. The answer said so, then added that landlords must provide hot water, and wasn't marked as a refusal. The rule is now explicit: **if the question asks for one specific fact (a number, a temperature, a date, a name) and the sources don't state it, that's a refusal**, even with related information. Multi-part questions still get partial answers.
+
+**Not yet measured end to end** (daily quota; see the previous entry).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/answer.py` | `_number()` formats numbers in the table source; two prompt rules (specific fact missing → refuse; how to write numbers) |
+| `tests/test_answer.py` | Number formatting in the source text |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -c "from app.answer import _number; print([_number(v) for v in (42462228.9200002, 6.985706, 5443, 0.75834, 3.0)])"
+```
+
+### Concepts
+
+- **Format at the source:** a model copies what it sees. Giving it "6.99" instead of "6.985706018518519" fixes the output more reliably than asking it to round.
+
+---
+
 ## Day 11 (2/5): a SQL review in code for the rules the prompt couldn't hold
 
 **Goal:** fix the biggest failure group, city-generated requests dropped without reason, plus the other SQL meaning errors, in a way that doesn't depend on the model obeying a prompt.
