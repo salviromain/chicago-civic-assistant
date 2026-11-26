@@ -4,6 +4,30 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (paused): CLAUDE.md updated with the runs left
+
+**Goal:** record where Day 11 stopped, so it resumes in the right order.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Day 11 status: held-out set written, three fixes committed, not measured yet; the four runs left, in order |
+
+### Why it stopped
+
+The free daily quota of both flash-lite models was used up by Day 10's runs; the re-run stopped after 4 questions. Google resets it at midnight Pacific. A probe call at the start of Day 11 succeeded only because a few calls were left, so "the probe works" doesn't mean "a full run fits".
+
+### Check it yourself
+
+Read the Day 11 line in `CLAUDE.md`.
+
+### Concepts
+
+- **Quota windows:** a daily limit resets at a fixed time in the provider's time zone, not 24 hours after you started.
+
+---
+
 ## Day 11 (3/5): tidy numbers, and refuse when the specific fact asked for is missing
 
 **Goal:** fix failure groups 3 and 4 in the answer step.
