@@ -39,6 +39,11 @@ def test_section_numbers_in_questions():
     assert section_numbers("Call 311 about 25 potholes in 2026") == []
 
 
+def test_old_section_numbers_map_to_current_ones():
+    assert section_numbers("What does 13-196-410 require?") == ["14X-8-802.2.2"]
+    assert section_numbers("Is 13-196-430 in the code?") == ["13-196-430"]  # no mapping: kept, finds nothing
+
+
 def test_rrf_rewards_agreement_between_lists():
     merged = retrieval.reciprocal_rank_fusion([["a", "b", "c"], ["b", "a", "d"], ["d"]])
     assert merged[:2] == ["a", "b"] or merged[:2] == ["b", "a"]

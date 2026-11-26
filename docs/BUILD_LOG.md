@@ -4,6 +4,43 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Audit (3/5): search understands old section numbers
+
+**Goal:** a question that quotes the number printed in the violations data ("What does 13-196-410 require?") should find the current rule.
+
+### What happened
+
+- The section-number pattern only allowed one or two digits in the middle (`5-12-…`, `14X-8-…`), so `13-196-410` wasn't even recognized. Search returned the heat *cost* rule (5-16-010) instead of the heat rule.
+- Now `13-196-410` maps to **14X-8-802.2.2**, which comes first. Only mappings checked by hand go in the table; there's one so far. `13-196-430` (hot water, 120°F) has no current equivalent in the loaded chapters, so it's left unmapped and finds nothing exact.
+- Other checks, no change needed:
+  - "RLTO" (the landlord–tenant ordinance's abbreviation) finds the security deposit sections.
+  - The 10 Day 4 questions score the same: hybrid 10/10, MRR 0.88.
+- **Off-topic questions can't be filtered by similarity score.** Best-match cosine similarity:
+  - in scope: 0.72 to 0.79;
+  - off topic: dog license 0.67, street cleaning 0.60, school speed limits 0.57, the mayor 0.66, the *2025* police budget 0.74.
+
+  The ranges overlap, so a cut-off would drop real questions. Refusing has to happen in the answer step (Day 6), which sees the text.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/retrieval.py` | `SECTION_RE` allows a 3-digit middle part; `OLD_SECTIONS = {"13-196-410": "14X-8-802.2.2"}`; `section_numbers` maps old → current |
+| `tests/test_retrieval.py` | Old heat number maps; an unmapped old number is kept as is |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); from app import retrieval; print([r['id'] for r in retrieval.search('What does 13-196-410 require?')])"
+.venv/bin/python -m scripts.try_search --quiet
+```
+
+### Concepts
+
+- **Cosine similarity threshold:** refusing when the best match scores below some number. It only works when relevant and irrelevant questions score in separate ranges; here they overlap.
+
+---
+
 ## Audit (2/5): the Gemini wrapper: check before caching, faster retries, fixed paths, thread lock, thinking level
 
 **Goal:** fix the ways the LLM plumbing could fail quietly or slowly.

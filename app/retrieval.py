@@ -22,8 +22,13 @@ from functools import lru_cache
 
 CANDIDATES = 50  # results taken from each search before merging
 
-# A section number in a question: 14X-8-803.6, 5-12-150. Not 5-12-110(a)'s "(a)".
-SECTION_RE = re.compile(r"\b((?:14X|\d{1,2})-\d{1,2}-\d{3}(?:\.\d+)*)\b", re.IGNORECASE)
+# A section number in a question: 14X-8-803.6, 5-12-150, or an old one like
+# 13-196-410. Not 5-12-110(a)'s "(a)".
+SECTION_RE = re.compile(r"\b((?:14X|\d{1,2})-\d{1,3}-\d{3}(?:\.\d+)*)\b", re.IGNORECASE)
+
+# Old Building Code numbers (still cited by the violations data) -> the current
+# section. Only mappings checked by hand go here (docs/TABLES.md, violation traps).
+OLD_SECTIONS = {"13-196-410": "14X-8-802.2.2"}  # heat
 _LEXEME_RE = re.compile(r"'((?:[^']|'')+)'(?::([0-9A-D,]+))?")
 
 COLUMNS = "id, doc, kind, section, title, parent, page, url, text"
@@ -137,7 +142,9 @@ def bm25_search(question: str, k: int = CANDIDATES) -> list[str]:
 
 
 def section_numbers(question: str) -> list[str]:
-    return [m.upper() for m in SECTION_RE.findall(question)]
+    """Section numbers named in the question, old numbers mapped to current ones."""
+    nums = [OLD_SECTIONS.get(m.upper(), m.upper()) for m in SECTION_RE.findall(question)]
+    return list(dict.fromkeys(nums))  # unique, in order
 
 
 def section_search(question: str) -> list[str]:
