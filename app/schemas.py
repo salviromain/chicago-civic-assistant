@@ -22,15 +22,28 @@ class Citation(BaseModel):
     url: str | None = None
 
 
+class Usage(BaseModel):
+    llm_calls: int = Field(0, description="Gemini API calls made (cached replies don't count)")
+    input_tokens: int = 0
+    output_tokens: int = Field(0, description="Including thinking tokens")
+
+
 class QueryResponse(BaseModel):
     answer: str
     route: Route
     citations: list[Citation] = []
     refused: bool = Field(False, description="True when the sources did not support an answer")
     latency_ms: int
-    cost_usd: float | None = None
+    cost_usd: float | None = Field(None, description=(
+        "Estimated LLM cost from token counts and the configured prices; 0 on the free tier"))
+    usage: Usage = Usage()
 
 
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str
+    database: str = Field("unknown", description="ok, or unavailable")
+
+
+class ErrorResponse(BaseModel):
+    detail: str

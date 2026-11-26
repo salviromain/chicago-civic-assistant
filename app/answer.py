@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
 from app.router import RouteDecision, route_question
-from app.schemas import Citation, QueryResponse
+from app.schemas import Citation, QueryResponse, Usage
 from app.sql_agent import SqlResult
 
 PREVIEW_ROWS = 50     # rows of a SQL result shown to the answer model
@@ -247,8 +247,20 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
         text, refused = (f"{REFUSAL} {reason}" if reason else REFUSAL), True
     trace.response = QueryResponse(
         answer=text or REFUSAL, route=decision.route, citations=citations, refused=refused,
-        latency_ms=round((time.perf_counter() - start) * 1000))
+        latency_ms=round((time.perf_counter() - start) * 1000),
+        usage=Usage(llm_calls=trace.llm_calls, input_tokens=trace.input_tokens,
+                    output_tokens=trace.output_tokens),
+        cost_usd=estimate_cost(trace.input_tokens, trace.output_tokens))
     return trace
+
+
+def estimate_cost(input_tokens: int, output_tokens: int) -> float:
+    """US$ from token counts and the configured prices (0 on the free tier).
+    Counts every token sent, cached replies included: what the request would cost
+    without the cache. Embeddings (one short question) are left out: a few tokens."""
+    from app.config import get_settings
+    s = get_settings()
+    return round((input_tokens * s.llm_usd_per_m_input + output_tokens * s.llm_usd_per_m_output) / 1e6, 6)
 
 
 def answer(question: str) -> QueryResponse:

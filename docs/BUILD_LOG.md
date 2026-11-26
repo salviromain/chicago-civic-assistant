@@ -4,6 +4,63 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 7 (1/3): the API: POST /query and GET /health, with clear errors and a time limit
+
+**Goal:** the Day 7 milestone: a question in through HTTP, a cited answer out, and failures that tell the client what happened instead of a bare "500 Internal Server Error".
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/main.py` | `POST /query` runs `answer()` in a worker pool with a 30 s limit; known failures mapped to 502/503/504; API key compared with `secrets.compare_digest`. `GET /health` also says whether the database answers |
+| `app/schemas.py` | `Usage` (Gemini calls, input and output tokens) in every response; `HealthResponse.database`; `ErrorResponse` |
+| `app/answer.py` | Fills `usage` and `cost_usd` (`estimate_cost`) |
+| `app/config.py` | `request_timeout_s = 30`; `llm_usd_per_m_input` / `_output` (prices for the cost estimate; 0 = free tier) |
+| `tests/test_api.py` | 12 tests with a fake pipeline: auth, input limits, the response shape, each error mapping, a slow request → 504, the cost formula. The tests set their own API key, so they don't depend on `.env` |
+| `README.md` | How to call `/query`, what comes back, what each error code means |
+
+### Errors
+
+| Code | When | Message |
+| --- | --- | --- |
+| 401 | Missing or wrong `X-API-Key` | Missing or invalid X-API-Key |
+| 422 | Question shorter than 3 or longer than 1,000 characters | (FastAPI's validation detail) |
+| 502 | Gemini failed: empty reply, JSON that doesn't fit the schema, repeated timeouts, an API error | The language model gave no usable answer. Please try again. |
+| 503 | Database down, or the daily Gemini quota used up | The database is unavailable. / The daily language-model quota is used up. |
+| 504 | No answer within 30 s | No answer within 30 s. Please try again. |
+| 500 | Anything else: a real bug, logged with its traceback | |
+
+### Checked against the real server
+
+Two local servers: one normal, one pointed at a database port with nothing on it.
+
+- `/health`: `"database": "ok"` on the first, `"unavailable"` on the second.
+- No key and a wrong key → 401; `"x"` → 422.
+- A question on the database-less server → **503** "The database is unavailable."
+- Real questions → 200 with the answer, the route, citations (the SQL; the code section with its link), usage and cost (0.0 on the free tier).
+- **Gemini had a bad few minutes** (503, then 504 on its side) and one request passed 30 s: the client got a clean **504**, as designed. Retried, it answered in 4.8 s.
+- A fully cached question took **0.19 s** end to end, so the API's own overhead is small; slow answers are Gemini time.
+
+### Check it yourself
+
+```bash
+SERVICE_API_KEY=local-test .venv/bin/uvicorn app.main:app --port 8000
+curl -s localhost:8000/health
+curl -s -X POST localhost:8000/query -H "X-API-Key: local-test" -H "Content-Type: application/json" \
+  -d '{"question": "How many pothole complaints were there in ward 25 in 2026?"}'
+```
+
+Or open http://localhost:8000/docs and use "Try it out".
+
+### Concepts
+
+- **HTTP status codes:** the first digit says whose fault it is: 4xx = the request was wrong (bad key, bad input), 5xx = the server or something it depends on failed. 502 "bad gateway" = an upstream service (Gemini) answered badly; 503 "unavailable" = a dependency is down; 504 "gateway timeout" = it took too long.
+- **Timing-safe comparison:** `==` on strings stops at the first different character, so a wrong key that starts right takes slightly longer to reject. With enough tries, that leaks the key. `secrets.compare_digest` always takes the same time.
+- **Request time limit:** the request runs in a worker thread and the endpoint waits at most 30 s for it. Python can't kill a thread, so slow work finishes in the background, but the client isn't left hanging.
+- **Cost estimate:** tokens × price per million. On the free tier it's 0; with the paid prices set it shows what a request would cost, the number Day 12 logs.
+
+---
+
 ## Day 6 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 6.

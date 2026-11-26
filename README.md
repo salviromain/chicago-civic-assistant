@@ -34,6 +34,15 @@ python -m ingest.load_tables --since 2026-01-01
 uvicorn app.main:app --reload             # http://localhost:8000/docs
 ```
 
+Ask a question (the key is `SERVICE_API_KEY` from `.env`):
+
+```bash
+curl -s -X POST localhost:8000/query -H "X-API-Key: $SERVICE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"question": "How many heat violations were recorded last winter, and what heat must landlords provide?"}'
+```
+
+The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, docs or both), the `citations` (the SQL that ran, or the code section / budget page with a link), `refused`, `latency_ms`, token `usage` and `cost_usd`. Errors: `401` bad key, `422` bad input, `502` the language model failed, `503` database down or daily quota used up, `504` no answer within 30 s.
+
 ## Evaluation
 
 Results will be published here: router accuracy, SQL execution accuracy, recall@5, faithfulness, citation accuracy, correct refusals, latency and cost per query, against a baseline (Claude + [OpenGov MCP](https://github.com/srobbin/opengov-mcp-server)).

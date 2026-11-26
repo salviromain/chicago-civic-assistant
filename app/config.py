@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     readonly_database_url: str = "postgresql://civic_reader:change-me@localhost:5432/civic"
     gemini_api_key: str = ""
     service_api_key: str = "change-me"
+    request_timeout_s: int = 30  # one /query request; past this the API answers 504
+
+    # Prices for the cost estimate, US$ per million tokens. 0 = free tier. Set them to
+    # the paid prices of llm_model to see what a request would cost (Day 12).
+    llm_usd_per_m_input: float = 0.0
+    llm_usd_per_m_output: float = 0.0
 
     # Model choices (compare Flash vs Pro in the evals)
     llm_model: str = "gemini-3.1-flash-lite"  # 2.5 retired for new keys; 3.8/3.5 Flash took 268 s / 23 s on the free tier
