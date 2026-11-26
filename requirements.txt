@@ -10,6 +10,7 @@ requests>=2.32
 pandas>=2.2
 pyarrow>=16.0
 google-genai>=1.0
+sqlglot>=25          # parses LLM-written SQL for the guardrails
 pymupdf>=1.24
 sentence-transformers>=3.0  # reranker (brings PyTorch)
 

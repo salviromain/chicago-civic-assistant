@@ -1,7 +1,7 @@
 import pytest
 
 from app.retrieval import reciprocal_rank_fusion
-from app.sql_agent import is_safe_select
+from app.sql_guard import is_safe_select
 from evals.run_evals import load_questions, recall_at_k, reciprocal_rank
 
 

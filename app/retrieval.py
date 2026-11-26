@@ -34,14 +34,10 @@ COLUMNS = "id, doc, kind, section, title, parent, page, url, text"
 
 
 def _connect():
-    import os
-
-    import psycopg
     from pgvector.psycopg import register_vector
 
-    from app.config import get_settings
-    url = os.getenv("READONLY_DATABASE_URL") or get_settings().readonly_database_url
-    conn = psycopg.connect(url.replace("postgresql+psycopg://", "postgresql://"))
+    from app.db import connect_readonly
+    conn = connect_readonly()
     register_vector(conn)
     return conn
 

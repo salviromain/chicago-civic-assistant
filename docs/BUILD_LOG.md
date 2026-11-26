@@ -4,6 +4,54 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 5 (2/3): SQL guardrails with a real parser, and a read-only executor
+
+**Goal:** make sure SQL written by the LLM can only read, only from the three city tables, and only a bounded number of rows, before the agent itself exists.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_guard.py` | `check_sql(sql, row_limit)` → safe SQL with a `LIMIT`, or `UnsafeSQL` with the reason. Replaces the regex check that was in `app/sql_agent.py` |
+| `app/db.py` | `connect_readonly()` (civic_reader) and `run_select(sql, max_rows)`: READ ONLY transaction, statement timeout, at most `max_rows` rows fetched, values made JSON-friendly |
+| `app/retrieval.py` | Uses `connect_readonly()` instead of its own copy |
+| `app/config.py` | `sql_timeout_s = 15` |
+| `requirements.txt` | `sqlglot` |
+| `tests/test_sql_guard.py`, `tests/test_db.py` | 24 tests: what's allowed, what's rejected and why, the row limit, the en dash survives, every TABLES.md example passes |
+
+### Three layers
+
+1. **The guard (`app/sql_guard.py`)** parses the SQL with **sqlglot** and rejects:
+   - anything but one `SELECT` (or `WITH … SELECT`, `UNION`): no `INSERT`, `UPDATE`, `DROP`, `COPY`, `SET`, …, including a `DELETE` hidden inside a `WITH`;
+   - `SELECT … INTO` (which creates a table) and `FOR UPDATE` (which locks rows);
+   - functions that sleep, read files or change settings (`pg_sleep`, `pg_read_file`, `set_config`, …);
+   - any table other than the three city tables (so not `doc_chunks`, not `pg_catalog`).
+   It adds `LIMIT 500` when there's none and lowers a bigger one. Comments are dropped, so `-- ; DROP TABLE` can't hide anything.
+2. **The role:** `civic_reader` can only `SELECT`.
+3. **The transaction:** `run_select` opens it `READ ONLY` with a 15 s `statement_timeout`. The role has a timeout too, but setting it per query keeps it when the database moves to Neon (Day 13), where `db/init.sql` won't have run.
+
+### Checked against the real database
+
+- All 7 example queries in `docs/TABLES.md` give **exactly the same rows** before and after the guard rewrites them (it reformats SQL, e.g. `x::text` → `CAST(x AS TEXT)`).
+- Skipping the guard and sending writes straight to Postgres: `CREATE TABLE` and `DELETE` → `cannot execute … in a read-only transaction`; `SELECT pg_sleep(3)` with a 1 s timeout → `canceling statement due to statement timeout`. So layers 2 and 3 hold on their own.
+- `scripts/try_search` gives the same results through the shared connection.
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_sql_guard.py
+.venv/bin/python -c "from app.sql_guard import check_sql; print(check_sql('SELECT ward FROM building_permits'))"
+.venv/bin/python -c "from app.sql_guard import check_sql; check_sql('SELECT * FROM building_permits; DROP TABLE building_permits')"
+```
+
+### Concepts
+
+- **Parser vs. regex:** a parser turns SQL into a tree (statement → clauses → expressions), the way Postgres reads it. Checking the tree ("is any node a DELETE?") can't be fooled by comments, quotes or odd spacing, which a text pattern can.
+- **Defence in depth:** several independent safety layers, so one mistake doesn't open the door. Here: the guard, the role, the read-only transaction.
+- **Statement timeout:** Postgres cancels any query running longer than this. Stops a slow LLM-written query from tying up the database.
+
+---
+
 ## Day 5 (1/3): one cached Gemini wrapper for every LLM call
 
 **Goal:** every text-generation call (SQL agent today; router, answers and the eval judge later) goes through one function that caches, paces and retries, so the free tier lasts and re-runs cost nothing.

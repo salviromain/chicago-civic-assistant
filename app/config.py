@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Guardrails and retrieval knobs
     sql_row_limit: int = 500
+    sql_timeout_s: int = 15  # also set on the civic_reader role (db/init.sql)
     retrieval_top_k: int = 20
     rerank_top_k: int = 5
     reranker_model: str = "BAAI/bge-reranker-base"  # local cross-encoder, runs on CPU

@@ -9,22 +9,7 @@ Prompt schema: docs/TABLES.md (tables, columns, real values, data traps and
 example queries). Load it into the prompt rather than repeating it here.
 """
 
-import re
-
-_FORBIDDEN = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|call|do)\b",
-    re.IGNORECASE,
-)
-
-
-def is_safe_select(sql: str) -> bool:
-    """Allow a single SELECT (or WITH ... SELECT) statement and nothing else."""
-    stripped = sql.strip().rstrip(";").strip()
-    if ";" in stripped:
-        return False  # multiple statements
-    if not re.match(r"^(select|with)\b", stripped, re.IGNORECASE):
-        return False
-    return not _FORBIDDEN.search(stripped)
+from app.sql_guard import UnsafeSQL, check_sql, is_safe_select  # noqa: F401
 
 
 def answer_with_sql(question: str) -> dict:
