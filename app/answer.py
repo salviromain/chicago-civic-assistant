@@ -83,6 +83,7 @@ class Trace:
     input_tokens: int = 0
     output_tokens: int = 0
     timings_ms: dict[str, int] = field(default_factory=dict)  # route, sources, answer, waited
+    cited: list[str] = field(default_factory=list)  # what the answer cited: "T1" or chunk ids
 
     @property
     def chunk_ids(self) -> list[str]:
@@ -239,6 +240,8 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
     lap("answer", t)
 
     text, citations = link_citations(draft.answer, available)
+    ids = {"T1": "T1", **{f"D{i}": c["id"] for i, c in enumerate(trace.chunks, 1)}}
+    trace.cited = [ids[sid] for sid in dict.fromkeys(_ID.findall(draft.answer)) if sid in available]
     refused = draft.refused
     if not refused and not citations:
         # An answer that cites nothing it was given can't be checked: refuse instead,

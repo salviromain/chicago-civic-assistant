@@ -3,7 +3,7 @@
 from collections import Counter
 
 from evals.build_questions import dec, money, num
-from evals.run_evals import contains, load_questions, must_contain_ok
+from evals.run_evals import citation_ok, contains, load_questions, must_contain_ok, sql_matches, summarize
 
 
 def test_numbers_match_as_whole_numbers():
@@ -13,6 +13,8 @@ def test_numbers_match_as_whole_numbers():
     assert contains("About 36.7% were duplicates.", "36.7") and not contains("136.7", "36.7")
     assert contains("$2,243,691,824 (proposed)", "2,243,691,824")
     assert contains("Ward 32.", "32")  # a full stop after a number is not a decimal
+    assert contains("no more than $10.00 a month", "10") and contains("$500.00", "500")
+    assert not contains("10.5 days", "10")
 
 
 def test_text_matches_ignore_case():
@@ -52,3 +54,49 @@ def test_reference_answers_pass_their_own_checks():
     for q in load_questions():
         if q["answerable"]:
             assert must_contain_ok(q["reference_answer"], q["answer_must_contain"]), q["id"]
+
+
+
+def test_sql_match_allows_extra_columns_and_rounding():
+    assert sql_matches([[721]], [[721]])
+    assert sql_matches([["Streets and Sanitation", 409928]], [["Streets and Sanitation", 483252]])  # key = first value
+    assert sql_matches([[2989283995]], [[2989283995, 1460, 1460]])  # later reference columns are context
+    assert sql_matches([[6.9857]], [[6.99]])          # both round to 7.0
+    assert sql_matches([[0.36705]], [[36.7]])         # a share as a fraction
+    assert not sql_matches([[718]], [[721]])
+    assert not sql_matches([[0.7957]], [[75.8]])
+    assert not sql_matches([], [[721]])
+
+
+def test_sql_match_accepts_either_side_of_a_tie():
+    ref = [["501 E 32ND ST", 4], ["5110 S DR MARTIN L KING JR DR", 4], ["1407 E 71ST PL", 3]]
+    assert sql_matches([["5110 S DR MARTIN L KING JR DR", 4]], ref, tie=True)
+    assert not sql_matches([["1407 E 71ST PL", 3]], ref, tie=True)
+    assert not sql_matches([["5110 S DR MARTIN L KING JR DR", 4]], ref, tie=False)
+
+
+def test_citation_needs_the_right_kind_of_source():
+    both = {"route": "both", "source_chunks": ["14X-8-802.2.2"]}
+    assert citation_ok(both, ["T1", "14X-8-802.2.2"])
+    assert not citation_ok(both, ["T1", "5-12-110#1"])
+    assert citation_ok({"route": "sql", "source_chunks": []}, ["T1"])
+
+
+def test_summary_rates():
+    recs = [
+        {"answerable": True, "refused": False, "route_ok": True, "checks_ok": True, "citation_ok": True,
+         "llm_calls": 2, "latency_ms": 2000, "tokens": 100, "cost_usd": 0.0, "recall@5": 1.0, "rr": 0.5,
+         "judge": {"faithful": True, "correctness": "correct"}},
+        {"answerable": True, "refused": True, "route_ok": False, "checks_ok": False, "citation_ok": False,
+         "llm_calls": 0, "latency_ms": 10, "tokens": 50, "cost_usd": 0.0,
+         "judge": {"faithful": True, "correctness": "incorrect"}},
+        {"answerable": False, "refused": True, "route_ok": True, "refusal_ok": True,
+         "llm_calls": 3, "latency_ms": 4000, "tokens": 90, "cost_usd": 0.0},
+    ]
+    s = summarize(recs)
+    assert s["router_accuracy"] == (2 / 3, 3) and s["answer_checks"] == (0.5, 2)
+    assert s["false_refusals"] == (0.5, 2) and s["correct_refusals"] == (1.0, 1)
+    assert s["faithfulness"] == (1.0, 1)          # refusals aren't judged for faithfulness
+    assert s["correctness_judge"] == (0.5, 2)
+    assert s["latency_measured_on"] == 2          # the cached question isn't timed
+    assert s["mrr"] == (0.5, 1)

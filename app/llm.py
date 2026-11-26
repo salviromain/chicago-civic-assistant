@@ -58,17 +58,17 @@ def cache_key(model: str, system: str | None, prompt: str, schema: type[BaseMode
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-_budget: MinuteBudget | None = None
+_budgets: dict[str, MinuteBudget] = {}
 _budget_lock = threading.Lock()  # the API (Day 7) handles requests in parallel threads
 
 
-def _minute_budget() -> MinuteBudget:
-    """One request budget per process, shared by every caller."""
-    global _budget
-    if _budget is None:
+def _minute_budget(model: str) -> MinuteBudget:
+    """One request budget per model per process, shared by every caller. Google's
+    free-tier limits are per model, so the eval judge doesn't slow the answers."""
+    if model not in _budgets:
         from app.config import get_settings
-        _budget = MinuteBudget(per_minute=get_settings().llm_requests_per_minute)
-    return _budget
+        _budgets[model] = MinuteBudget(per_minute=get_settings().llm_requests_per_minute)
+    return _budgets[model]
 
 
 @lru_cache(maxsize=1)
@@ -147,7 +147,7 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
                              if thinking_budget is not None or thinking_level else None))
         t0 = time.perf_counter()
         with _budget_lock:
-            (budget or _minute_budget()).wait_for(1)
+            (budget or _minute_budget(model)).wait_for(1)
         waited_ms = round((time.perf_counter() - t0) * 1000)
         start = time.perf_counter()
         response = _call_with_retry(client or _client(), model, prompt, config)

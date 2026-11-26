@@ -301,8 +301,9 @@ Q: list[dict] = [
          answer="$1.87 billion, with no increase to the base levy (proposed).", must=[["1.87"]]),
     dict(id="q067", q="What does the 2027 budget say about police overtime?", route="docs",
          chunks=["budget-2027-p017-1"], phrase="Executive Order 2025-11, capping police overtime",
-         answer="The mayor signed Executive Order 2025-11 in December 2025, capping police overtime; CPD reports monthly and joins quarterly City Council hearings.",
-         must=[["2025-11", "executive order"]]),
+         answer="The mayor signed Executive Order 2025-11 in December 2025, capping police overtime; CPD reports monthly and joins quarterly City Council hearings. The budget also plans civilian hires (e.g. over 40 Detention Aides) to cut overtime.",
+         # Widened after the baseline: the budget also ties civilian hiring to overtime (p. 125)
+         must=[["2025-11", "executive order", "Detention Aides", "monthly reports"]]),
     dict(id="q068", q="What is the proposed 2027 budget for the Chicago Department of Public Health?", route="docs", tags=["trap:proposed"],
          chunks=["budget-2027-p138-1"], phrase="Chicago Department of Public Health | 347,937,660 | 333,468,767",
          answer="$333,468,767 (proposed), down from $347,937,660 in 2026.", must=[money(333468767), ["propos"]]),

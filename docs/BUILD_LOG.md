@@ -4,6 +4,95 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 9: the eval harness, the judge, and the baseline
+
+**Goal:** score the system on the 87 held-out questions with every metric in the plan, check that the LLM judge can be trusted, and record the baseline that Days 10 and 11 improve on.
+
+### Baseline (2026-11-26)
+
+`gemini-3.1-flash-lite` answering, `gemini-3.5-flash-lite` judging. One live run (38 min), then re-scored from the cache after fixing four scoring bugs (below).
+
+| Metric | All 87 | Without the 4 `seen-in-tuning` | Target |
+| --- | --- | --- | --- |
+| Router accuracy | **100%** (87/87) | 100% (83) | 90%+ |
+| SQL execution accuracy | **79.1%** (34/43) | 79.1% | 85%+ ✗ |
+| Recall@5 | **97.7%** (43/44) | 97.6% | 80%+ |
+| MRR | **0.76** | 0.76 | 0.6+ |
+| Answer correctness (deterministic checks) | **84.4%** (65/77) | 84.0% | 80%+ |
+| Answer correctness (judge) | 89.6% | 89.3% | |
+| Faithfulness (judge) | **100%** (77/77) | 100% | 90%+ |
+| Citation accuracy | **98.7%** | 98.7% | 90%+ |
+| Correct refusals | **100%** (10/10) | 100% (8) | 90%+ |
+| False refusals | 0% | 0% | |
+| Latency p50 / p95 (without pacer waits) | **16.7 s / 70.2 s** | | p95 under ~8 s ✗ |
+| Tokens per question | 8,559 | | |
+| Cost per question | $0 (free tier) | | reported |
+
+By route, answer checks: sql 78.8%, docs 94.1%, both 70.0%.
+
+**Latency was measured on a bad day.** Gemini answered "This model is currently experiencing high demand" 104 times during the run; a routing call took 5.4 s at the median (about 1 s the day before). The pacer (8 calls a minute) made 29 of 78 questions wait, up to 36 s, so latency is reported with and without those waits; a single user never waits for the pacer. Day 10 re-measures.
+
+### Why the answers fail (Day 11 starts here)
+
+| Cause | Questions | Answers failing |
+| --- | --- | --- |
+| **City-generated requests excluded by default** (the Day 5 rule still doesn't hold on new questions: "graffiti removal requests", "vicious animal complaints", "Animal Care and Control requests") | q005, q018, q075, q078, q079 (+ q006, q012: right name/month, wrong count) | 5 |
+| SQL meaning: duplicates left in; violation rows counted instead of inspections; a median when the question asked for the average | q010, q023, q037 | 3 |
+| Unrounded numbers in the answer ("6.985706018518519 days", "42462228.9200002") | q011, q033 | 2 |
+| Search missed 5-12-040 (tenant responsibilities) | q059 | 1 |
+| Incomplete list (nursing homes left out) | q048 | 1 |
+
+### Can the judge be trusted?
+
+- **Hand check of 20 verdicts** (`evals/results/baseline-judge-review.md`, mine in `evals/judge_checks.json`): faithfulness 20/20, correctness **18/20**. The two disagreements: q006 (right department, wrong count: judge "incorrect", me "partial") and q075 (count off by 3: judge "correct", me "partial"). Three claims in the sample that looked suspicious were checked against the section text and are real (police investigation in 5-12-160; 24 h / 72 h utility limits in 5-12-110; the Jackson Park pilot's 180 days).
+- **Faithfulness 100% could mean a judge that never says no**, so 3 real answers were given a planted false claim ($50 per entry, 300 new firefighters, "ward 41 after the July storms"): **caught 3/3** (`--canary`).
+- **Lenient on near-miss numbers:** compared with the deterministic checks on all 77, the judge called q023 (79.6% vs 75.8%), q075, q078, q079 (off by 1 to 9) "correct". So **the headline correctness number is the deterministic one**; the judge is used for faithfulness and as a second opinion.
+- First calibration: on the trial run it called a wrong count "partial". The prompt now says a wrong key fact is "incorrect" and "partial" is for multi-part questions.
+- Judge model: `gemini-3.5-flash` was planned, but its free daily quota ran out after a handful of calls, so `gemini-3.5-flash-lite` (a newer model than the one answering) judges.
+
+### Scoring bugs fixed before the final numbers
+
+Found by reading every failure of the live run; none changes what the system did, only how it's scored:
+
+1. **"$10.00" didn't match "10"** (q041, q042): numbers now compare by value, still as whole numbers ("10" doesn't match "10.5").
+2. **Section numbers in citations didn't count** (q072): the answer said "under the Municipal Code" and cited "[2] Section 5-12-110". The checks now read the citations too: the user sees them.
+3. **SQL execution compared every reference column** (q028): the reference query also returned context (how many permits report a cost). Now the key value (the first one) is compared, and a share may be a fraction or a percentage (q008: 0.367 = 36.7%).
+4. **The q067 reference was too narrow:** "What does the budget say about police overtime?" expected the executive order; the answer described civilian hires that cut overtime (budget p. 125) and the monthly reports (p. 17), all grounded. The accepted strings were widened. This is the one change to the eval set after seeing results.
+
+Also: one question hit a Gemini 503 and was re-run; the re-scored run takes each question's timings from the live run (`--timing-from`), since cached replies take ~0 s.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/run_evals.py` | The harness: runs the pipeline and the judge per question, computes every metric, writes `<label>.jsonl` (details, not committed) and `<label>-summary.json`; `--subset`, `--ids`, `--no-judge`, `--judge-model`, `--timing-from`; stops cleanly on the daily quota |
+| `evals/review_judge.py` | Review sheet of 20 verdicts, agreement with `judge_checks.json`, `--canary` |
+| `evals/judge_checks.json` | My 20 verdicts with notes |
+| `evals/results/baseline-summary.json`, `baseline-judge-review.md` | The baseline and the sheet |
+| `evals/build_questions.py`, `questions.jsonl` | q067's accepted strings widened |
+| `app/llm.py` | Pacing per model (Google's limits are per model, so the judge doesn't slow the answers) |
+| `app/answer.py` | `Trace.cited`: which chunks the answer actually cited (for citation accuracy) |
+| `tests/test_evals.py` | Number matching by value, SQL key-value matching (fraction = percentage, ties, context columns), citation rule, metric rates |
+| `README.md` | Results table |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m evals.run_evals --label baseline --timing-from evals/results/baseline-live.jsonl   # re-score from the cache: ~20 s
+.venv/bin/python -m evals.review_judge --score
+.venv/bin/python -m evals.review_judge --canary
+cat evals/results/baseline-summary.json
+```
+
+### Concepts
+
+- **LLM-as-judge:** a second model grades answers (here: is every claim supported? does it match the reference?). Cheap and scalable, but it has its own errors, so it's checked against a person (agreement rate) and against planted mistakes (canaries).
+- **Deterministic vs. judged metrics:** a string or number check is exact but rigid (it fails "6.9857" for "7"); a judge is flexible but can be lenient ("6,912 ≈ 6,915"). Using both, and knowing which to trust for what, gives an honest score.
+- **Execution accuracy:** judging SQL by its result, not its text: two different queries are equally right if they return the same answer.
+- **Baseline:** the first full measurement. Every later change is reported as before/after on the same 87 questions.
+
+---
+
 ## Day 8 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 8.

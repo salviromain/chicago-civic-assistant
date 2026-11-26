@@ -1,0 +1,24 @@
+{
+  "baseline": {
+    "q005": {"faithful": true, "correctness": "incorrect", "note": "4,203 vs 5,443: city-generated requests excluded"},
+    "q006": {"faithful": true, "correctness": "partial", "note": "The department asked for is right; the count (409,928) is wrong. Judge said incorrect"},
+    "q010": {"faithful": true, "correctness": "incorrect", "note": "Duplicates left in: 134,406 vs 118,881"},
+    "q018": {"faithful": true, "correctness": "incorrect", "note": "4,172 vs 4,176"},
+    "q021": {"faithful": true, "correctness": "partial", "note": "One side of a two-way tie"},
+    "q037": {"faithful": true, "correctness": "incorrect", "note": "Median given; the question asked for the average"},
+    "q048": {"faithful": true, "correctness": "partial", "note": "Nursing homes missing"},
+    "q059": {"faithful": true, "correctness": "incorrect", "note": "5-12-040 not retrieved; answer lists other duties"},
+    "q001": {"faithful": true, "correctness": "correct", "note": "Refusal with the right reasons"},
+    "q009": {"faithful": true, "correctness": "correct"},
+    "q016": {"faithful": true, "correctness": "correct"},
+    "q024": {"faithful": true, "correctness": "correct"},
+    "q030": {"faithful": true, "correctness": "correct"},
+    "q036": {"faithful": true, "correctness": "correct"},
+    "q043": {"faithful": true, "correctness": "correct", "note": "Checked: police investigate (5-12-160); 24 h / 72 h limits (5-12-110#4)"},
+    "q050": {"faithful": true, "correctness": "correct", "note": "Checked: two months' rent if the landlord tries to enforce it (5-12-140)"},
+    "q056": {"faithful": true, "correctness": "correct", "note": "Checked: Jackson Park pilot, 180 days for tenancies over three years (5-12-135)"},
+    "q063": {"faithful": true, "correctness": "correct"},
+    "q069": {"faithful": true, "correctness": "correct"},
+    "q075": {"faithful": true, "correctness": "partial", "note": "Budget right; count 6,912 vs 6,915 (city-generated excluded). Judge said correct"}
+  }
+}

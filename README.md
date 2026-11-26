@@ -45,12 +45,29 @@ The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, doc
 
 ## Evaluation
 
-Results will be published here: router accuracy, SQL execution accuracy, recall@5, faithfulness, citation accuracy, correct refusals, latency and cost per query, against a baseline (Claude + [OpenGov MCP](https://github.com/srobbin/opengov-mcp-server)).
+87 held-out questions (`evals/questions.jsonl`: 33 table, 34 document, 10 both, 10 unanswerable), with answers computed from the data and the documents (`evals/build_questions.py`). Run with `python -m evals.run_evals --label <name>`.
+
+**Baseline** (2026-11-26, `gemini-3.1-flash-lite`, judge `gemini-3.5-flash-lite`):
+
+| Metric | Result | Target |
+| --- | --- | --- |
+| Router accuracy | 100% (87/87) | 90%+ |
+| SQL execution accuracy | 79.1% (34/43) | 85%+ |
+| Recall@5 / MRR | 97.7% / 0.76 | 80%+ / 0.6+ |
+| Answer correctness (checks) | 84.4% (65/77) | 80%+ |
+| Answer correctness (LLM judge) | 89.6% | |
+| Faithfulness (LLM judge) | 100% (77/77) | 90%+ |
+| Citation accuracy | 98.7% | 90%+ |
+| Correct refusals / false refusals | 100% (10/10) / 0% | 90%+ |
+| Latency p50 / p95 | 16.7 s / 70.2 s (Gemini overloaded that day) | p95 under ~8 s |
+| Cost per question | $0 (free tier), ~8,600 tokens | reported |
+
+The judge agreed with a hand check on 18 of 20 correctness verdicts and 20 of 20 faithfulness verdicts, and caught 3 of 3 planted false claims. It is too lenient on near-miss numbers, so the table's correctness figure comes from deterministic checks.
 
 | System | Router | SQL | Recall@5 | Faithfulness | Correct refusals |
 | --- | --- | --- | --- | --- | --- |
-| Baseline | n/a | – | n/a | – | – |
-| This project | – | – | – | – | – |
+| Comparison: Claude + OpenGov MCP (Day 10) | n/a | – | n/a | – | – |
+| This project (first run, 2026-11-26) | 100% | 79.1% | 97.7% | 100% | 100% |
 
 ## Data sources
 
