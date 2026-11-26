@@ -4,6 +4,63 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 8: the eval set, 87 questions with computed answers
+
+**Goal:** a fixed set of questions, with the right route, answer and sources for each, that Day 9 scores the system on. They must be **new**: the 53 questions in `scripts/try_sql.py` and `scripts/try_answer.py` shaped the prompts, so scoring on them would overstate accuracy.
+
+### What's in it
+
+| Kind | Count | Examples |
+| --- | --- | --- |
+| Tables (sql) | 33 | graffiti in ward 12 in 2025; share of pothole reports that were duplicates; month with most potholes; median permit time for express permits (en dash); share of *inspections* that failed (not violations); permits mentioning a garage |
+| Documents (docs) | 34 | entry notice (two days); deposit return (45 days); late fee cap; repair-and-deduct; lockouts; owner-occupied exclusion; heating cost disclosure; foreclosure notice; bed bugs; 120-day non-renewal notice; police, fire, Streets and Sanitation, Public Health budgets; the $882.4M budget gap; the $1.87B property tax levy |
+| Both | 10 | heat violations in January 2026 + the date heat must start; no-AC complaints in summer 2026 + the 80°F heat index rule; Housing requests + the Housing budget |
+| Unanswerable | 10 | information-only calls (not loaded); violations by community area (no column); permits in 2022; Airbnb rules; the hot water temperature (not in the loaded chapters); population; a forecast; noise complaints |
+
+Tags mark the traps a question tests (`trap:duplicates`, `trap:en-dash`, `trap:rows-vs-inspections`, `trap:proposed`, …). Today's date for every question is 2026-11-25.
+
+### How the answers were made
+
+They're computed by a script, not typed: `evals/build_questions.py` holds the questions and writes `evals/questions.jsonl`.
+
+- **Table questions:** a reference SQL query runs as `civic_reader`; its result fills the reference answer and the strings the answer must contain (with variants: `5,443` / `5443`; `36.7` / `37`; `$2,243,691,824` / `2.24 billion`).
+- **Document questions:** the expected chunks must exist, and a **key phrase** (the fact the answer depends on, e.g. "no less than two days") must appear in one of them. All 44 phrases were found on the first build, so no chunk id is a guess.
+- **Every reference answer must pass its own checks** (a test). That caught two mistakes in my reference answers: "882" vs "$882.4 million", and "kept" vs "maintained".
+- `--check` rebuilds without writing and reports any difference, e.g. after a data reload changes a count.
+
+### Kept honest
+
+- **Overlap with the tuning questions**, checked automatically (word overlap ≥ 50%): the near-matches share a pattern but ask for a different item, year or fact ("demolition permits in 2026" vs "solar panel permits in 2026"). The exception is **q001–q004**: they were in the file before Day 8 and were used in tuning, so they're tagged `seen-in-tuning` and Day 9 reports scores with and without them.
+- **Dropped questions:** "porch violations" (1,351 by description vs 2,400 by ordinance: no single right answer) and "what does the code say about smoke detectors" (planned as a refusal, but 5-12-110 does mention them).
+
+### Matching answers fairly
+
+`evals/run_evals.py` gets `contains()` and `must_contain_ok()`, which Day 9 uses. **A plain number must appear as a whole number:** "3" doesn't match "2,032" or "13", and "36.7" doesn't match "136.7". Commas are ignored ("5443" = "5,443"). Anything else is a case-insensitive substring match.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/build_questions.py` | The 87 questions, reference SQL, key phrases; builds and checks `questions.jsonl` |
+| `evals/questions.jsonl` | Rebuilt: 87 questions with `reference_sql`, `reference_result`, `reference_answer`, `answer_must_contain`, `source_chunks`, `tags`, `as_of`. `q002` is no longer `TODO` |
+| `evals/run_evals.py` | `contains()`, `must_contain_ok()` |
+| `tests/test_evals.py` | Whole-number matching, number variants, the set's shape (counts per kind, every answerable question has checks), every reference answer passes its own checks |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m evals.build_questions --check     # "87 questions; no differences"
+.venv/bin/python -c "import json; [print(r['id'], r['route'], r['question']) for r in map(json.loads, open('evals/questions.jsonl'))]" | head -20
+```
+
+### Concepts
+
+- **Eval set (golden set):** questions with known right answers, fixed in advance, so every change can be scored the same way.
+- **Held-out:** not seen while building. Scores on tuning questions measure memory of the fixes, not how well the system handles new questions.
+- **Generated references:** computing the expected answer from the source (SQL, chunk text) rather than typing it, so a typo can't become the "right" answer, and the set can be rebuilt when the data changes.
+
+---
+
 ## Day 7 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 7. Week 1 (make it work end to end) is complete.
