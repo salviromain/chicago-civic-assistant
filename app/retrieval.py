@@ -33,6 +33,27 @@ _LEXEME_RE = re.compile(r"'((?:[^']|'')+)'(?::([0-9A-D,]+))?")
 
 COLUMNS = "id, doc, kind, section, title, parent, page, url, text"
 
+# The chunk table searched. Only the Day 10 chunking experiment switches it (use_table).
+TABLES = {"doc_chunks", "doc_chunks_fixed"}
+TABLE = "doc_chunks"
+
+
+class use_table:
+    """with use_table("doc_chunks_fixed"): search(...)  (experiments only; not thread-safe)"""
+
+    def __init__(self, name: str):
+        if name not in TABLES:
+            raise ValueError(f"unknown chunk table {name!r}")
+        self.name = name
+
+    def __enter__(self):
+        global TABLE
+        self.previous, TABLE = TABLE, self.name
+
+    def __exit__(self, *exc):
+        global TABLE
+        TABLE = self.previous
+
 
 # ---------------------------------------------------------------------------
 # Database
@@ -51,7 +72,7 @@ def fetch_chunks(ids: list[str]) -> dict[str, dict]:
     if not ids:
         return {}
     with _connect() as conn:
-        rows = conn.execute(f"SELECT {COLUMNS} FROM doc_chunks WHERE id = ANY(%s)", [ids]).fetchall()
+        rows = conn.execute(f"SELECT {COLUMNS} FROM {TABLE} WHERE id = ANY(%s)", [ids]).fetchall()
     names = COLUMNS.split(", ")
     return {r[0]: dict(zip(names, r)) for r in rows}
 
@@ -67,7 +88,7 @@ def vector_search(question: str, k: int = CANDIDATES) -> list[str]:
     from app.embeddings import embed_query
     qvec = np.array(embed_query(question), dtype=np.float32)
     with _connect() as conn:
-        rows = conn.execute("SELECT id FROM doc_chunks ORDER BY embedding <=> %s LIMIT %s",
+        rows = conn.execute(f"SELECT id FROM {TABLE} ORDER BY embedding <=> %s LIMIT %s",
                             [qvec, k]).fetchall()
     return [r[0] for r in rows]
 
@@ -118,11 +139,15 @@ class BM25Index:
         return sorted(scores, key=lambda d: (-scores[d], d))[:k]
 
 
-@lru_cache(maxsize=1)
 def bm25_index() -> BM25Index:
+    return _bm25_index(TABLE)
+
+
+@lru_cache(maxsize=4)
+def _bm25_index(table: str) -> BM25Index:
     """Built once per process from the stored tsvectors (351 chunks: milliseconds)."""
     with _connect() as conn:
-        rows = conn.execute("SELECT id, tsv::text FROM doc_chunks").fetchall()
+        rows = conn.execute(f"SELECT id, tsv::text FROM {table}").fetchall()
     return BM25Index({doc_id: parse_tsvector(tsv) for doc_id, tsv in rows})
 
 
@@ -154,7 +179,7 @@ def section_search(question: str) -> list[str]:
         return []
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id FROM doc_chunks WHERE section = ANY(%s) OR section LIKE ANY(%s) ORDER BY id",
+            f"SELECT id FROM {TABLE} WHERE section = ANY(%s) OR section LIKE ANY(%s) ORDER BY id",
             [nums, [n + ".%" for n in nums]]).fetchall()
     return [r[0] for r in rows]
 
@@ -209,7 +234,7 @@ def rerank_text(chunk: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def search(question: str, mode: str = "hybrid", rerank: bool | None = None,
+def search(question: str, mode: str | None = None, rerank: bool | None = None,
            top_k: int | None = None, candidates: int | None = None) -> list[dict]:
     """Best chunks for a question, each a dict with its source and why it ranked.
 
@@ -222,6 +247,7 @@ def search(question: str, mode: str = "hybrid", rerank: bool | None = None,
     top_k = top_k or s.rerank_top_k
     candidates = candidates or s.retrieval_top_k
     rerank = s.use_reranker if rerank is None else rerank
+    mode = mode or s.search_mode
     if mode not in {"vector", "keyword", "hybrid"}:
         raise ValueError(f"unknown mode {mode!r}")
 

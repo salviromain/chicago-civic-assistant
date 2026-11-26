@@ -259,10 +259,21 @@ def main() -> None:
     p.add_argument("--ids", help="comma-separated question ids")
     p.add_argument("--no-judge", action="store_true")
     p.add_argument("--judge-model", default=JUDGE_MODEL)
+    p.add_argument("--model", help="answer model for the whole pipeline (default: llm_model)")
+    p.add_argument("--search-mode", choices=["vector", "keyword", "hybrid"])
+    p.add_argument("--sql-thinking", help="thinking level for the SQL agent: minimal, low, medium, high")
     p.add_argument("--timing-from", help=(
         "results .jsonl of an earlier live run: re-scoring from the cache takes ~0 s per "
         "question, so take each question's timings from that run instead"))
     args = p.parse_args()
+    # Experiments override settings through the environment, before anything reads them
+    import os
+
+    from app.config import get_settings
+    for flag, env in (("model", "LLM_MODEL"), ("search_mode", "SEARCH_MODE"), ("sql_thinking", "SQL_THINKING_LEVEL")):
+        if getattr(args, flag):
+            os.environ[env] = getattr(args, flag)
+    get_settings.cache_clear()
     timing = {}
     if args.timing_from:
         for line in Path(args.timing_from).open():
@@ -317,8 +328,9 @@ def main() -> None:
         return
     summary = {"label": args.label, "date": dt.date.today().isoformat(),
                "minutes": round((time.perf_counter() - start) / 60, 1), "errors": errors}
-    from app.config import get_settings
-    summary["model"] = get_settings().llm_model
+    s = get_settings()
+    summary["model"] = s.llm_model
+    summary["search_mode"], summary["sql_thinking_level"] = s.search_mode, s.sql_thinking_level
     summary["judge_model"] = None if args.no_judge else args.judge_model
     summary["all"] = summarize(recs)
     unseen = [r for r in recs if "seen-in-tuning" not in r["tags"]]

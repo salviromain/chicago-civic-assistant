@@ -65,13 +65,13 @@ def fake_backends(monkeypatch):
 
 
 def test_hybrid_without_rerank_follows_rrf(fake_backends):
-    ids = [r["id"] for r in retrieval.search("q", rerank=False, top_k=5)]
+    ids = [r["id"] for r in retrieval.search("q", mode="hybrid", rerank=False, top_k=5)]
     assert ids[0] == "b"  # first or second in both lists
     assert set(ids) == {"a", "b", "c", "d", "e"}
 
 
 def test_rerank_reorders_candidates(fake_backends):
-    results = retrieval.search("q", rerank=True, top_k=2)
+    results = retrieval.search("q", mode="hybrid", rerank=True, top_k=2)
     assert [r["id"] for r in results] == ["e", "c"]
     assert results[0]["bm25_rank"] == 3 and results[0]["vector_rank"] is None
 
@@ -84,7 +84,7 @@ def test_keyword_mode_skips_vector_search(fake_backends, monkeypatch):
 
 def test_named_section_always_reaches_candidates(fake_backends, monkeypatch):
     monkeypatch.setattr(retrieval, "section_search", lambda q: ["g"])
-    ids = [r["id"] for r in retrieval.search("what does g say", rerank=False, candidates=2, top_k=5)]
+    ids = [r["id"] for r in retrieval.search("what does g say", mode="hybrid", rerank=False, candidates=2, top_k=5)]
     assert ids[0] == "g"
 
 
@@ -104,3 +104,10 @@ def test_rerank_text_drops_shared_budget_label():
     assert retrieval.rerank_text(chunk) == "Community Services\nLibrary Fund | 99,795,421"
     code = {"kind": "code", "title": "Heat", "text": "14X-8-802.2.2 Heat to be provided\nbody"}
     assert retrieval.rerank_text(code) == code["text"]
+
+
+def test_default_mode_is_vector_plus_exact_sections(fake_backends, monkeypatch):
+    monkeypatch.setattr(retrieval, "bm25_search", lambda q, k=50: pytest.fail("BM25 called"))
+    monkeypatch.setattr(retrieval, "section_search", lambda q: ["g"])
+    ids = [r["id"] for r in retrieval.search("q", top_k=5)]
+    assert ids[0] == "g" and set(ids) == {"g", "a", "b", "c"}

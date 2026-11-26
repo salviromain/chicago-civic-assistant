@@ -304,8 +304,12 @@ def chunk_budget(path: Path = BUDGET_FILE, toc_pdf_page: int = 3, page_offset: i
 # Storage
 
 
-def store(chunks: list[Chunk], vectors: list[list[float]] | None, database_url: str, dims: int) -> None:
-    """Recreate doc_chunks and insert every chunk; indexes are built after loading."""
+def store(chunks: list[Chunk], vectors: list[list[float]] | None, database_url: str, dims: int,
+          table: str = "doc_chunks") -> None:
+    """Recreate the chunk table and insert every chunk; indexes are built after loading.
+    `table` is doc_chunks, or doc_chunks_fixed for the Day 10 chunking experiment."""
+    if table not in ("doc_chunks", "doc_chunks_fixed"):
+        raise ValueError(f"unknown chunk table {table!r}")
     import numpy as np
     import psycopg
     from pgvector.psycopg import register_vector
@@ -314,9 +318,9 @@ def store(chunks: list[Chunk], vectors: list[list[float]] | None, database_url: 
     with psycopg.connect(url) as conn:
         conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         register_vector(conn)
-        conn.execute("DROP TABLE IF EXISTS doc_chunks")
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
         conn.execute(f"""
-            CREATE TABLE doc_chunks (
+            CREATE TABLE {table} (
                 id        text PRIMARY KEY,
                 doc       text NOT NULL,
                 kind      text NOT NULL,
@@ -334,13 +338,13 @@ def store(chunks: list[Chunk], vectors: list[list[float]] | None, database_url: 
             )""")
         with conn.cursor() as cur:
             cur.executemany(
-                "INSERT INTO doc_chunks (id, doc, kind, section, title, parent, page, url, text,"
+                f"INSERT INTO {table} (id, doc, kind, section, title, parent, page, url, text,"
                 " n_tokens, embedding) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 [(c.id, c.doc, c.kind, c.section, c.title, c.parent, c.page, c.url, c.text,
                   c.n_tokens, np.array(vectors[i], dtype=np.float32) if vectors else None)
                  for i, c in enumerate(chunks)])
-        conn.execute("CREATE INDEX doc_chunks_tsv_idx ON doc_chunks USING gin (tsv)")
-        conn.execute("CREATE INDEX doc_chunks_embedding_idx ON doc_chunks "
+        conn.execute(f"CREATE INDEX {table}_tsv_idx ON {table} USING gin (tsv)")
+        conn.execute(f"CREATE INDEX {table}_embedding_idx ON {table} "
                      "USING hnsw (embedding vector_cosine_ops)")
 
 

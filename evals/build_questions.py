@@ -421,7 +421,7 @@ def build(conn_rows, conn_chunks) -> list[dict]:
             "reference_result": {"columns": columns, "rows": rows[:5]} if rows else None,
             "reference_answer": answer,
             "answer_must_contain": [sorted(set(map(str, g))) for g in must],
-            "source_chunks": chunks,
+            "source_chunks": chunks, "key_phrase": d.get("phrase"),
             "tags": d.get("tags", []), "as_of": AS_OF,
         })
     if problems:

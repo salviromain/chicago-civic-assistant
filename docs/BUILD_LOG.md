@@ -4,6 +4,91 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 10 (2/3): experiments: chunking, search, reranker, model
+
+**Goal:** change one thing at a time, score it on the same 87 questions, and keep only what helps.
+
+### Retrieval experiments (44 document and both questions, no answer calls)
+
+**Relevance = the chunk contains the question's key phrase** (the fact the answer depends on, verified on Day 8, now stored in `questions.jsonl` as `key_phrase`). Chunk ids from one chunking don't exist in the other, so this is the fair measure for comparing them. A both-question is searched with the router's document part, as in the pipeline.
+
+| Configuration | Recall@5 | MRR | Median time | Misses |
+| --- | --- | --- | --- | --- |
+| **Vector only** (+ exact section lookup) | **100%** | **0.78** | 0.03 s | none |
+| Keyword only (BM25) | 81.8% | 0.58 | 0.03 s | 8 |
+| Hybrid (Days 4–9) | 95.5% | 0.74 | 0.04 s | q048 (cooling), q059 (tenant duties) |
+| Hybrid + reranker | 72.7% | 0.61 | 2.18 s | 12 |
+| Fixed 500-token code chunks, hybrid | 95.5% | 0.73 | 0.04 s | q043, q058 |
+| Fixed 500-token code chunks, vector | 95.5% | 0.74 | 0.03 s | q057, q058 |
+
+- **Chunking:** cutting the code every ~500 tokens (43 chunks) instead of by section (69) makes no difference to recall; it loses the section numbers that make exact lookup and citations work. **Keep sections.**
+- **Reranker:** clearly worse on new questions (72.7%), confirming Day 4. **Stays off.**
+- **Vector vs. hybrid:** BM25 pulls in long sections that share common words ("tenant", "landlord") and pushes the right one out (q059: 5-12-040 never made the top 5). On Day 4's 10 questions hybrid was ahead by one (the $17.6B infographic page); across all 54 questions vector misses 1, hybrid 2. Small, so it was tested end to end before changing.
+
+### End-to-end experiments (all 87 questions)
+
+| Metric | Baseline | Vector search | Answer model `gemini-3.5-flash-lite` |
+| --- | --- | --- | --- |
+| Router accuracy | 100% | 100% | 100% |
+| SQL execution | 79.1% | 79.1% | **93.0%** |
+| Recall@5 / MRR (chunk ids) | 97.7% / 0.76 | **100% / 0.81** | 97.7% / 0.76 |
+| Answer checks | 84.4% | 87.0% | **90.9%** |
+| Judge correctness | 89.6% | 92.2% | 93.5% (judging itself) |
+| Faithfulness | 100% | 100% | 100% |
+| Citation accuracy | 98.7% | **100%** | 96.1% |
+| Correct / false refusals | 10/10 / 0% | 9/10 / 0% | 9/9 / 0% |
+| Latency p50 / p95 (no pacer waits) | 16.7 / 70.2 s | 2.4 / 19.9 s | 3.6 / 8.9 s |
+
+(After the citation fix in the previous entry; all three re-scored from the cache.)
+
+**Vector search:** fixes both retrieval misses (q048, q059: +2 correct answers). One unanswerable question (q084, the hot water temperature) now gets a partial answer ("the sources don't specify a temperature, though landlords must provide hot water") instead of a refusal. **Adopted:** `search_mode = "vector"`.
+
+**`gemini-3.5-flash-lite` answering** writes much better SQL: it no longer drops city-generated requests (q005, q018, q075, q078, q079), counts *inspections* (q023), computes the average when asked (q037) and rounds numbers (q011). New failures:
+- **q014**, "How many open fire hydrant complaints were made in July 2025?": it added `status = 'Open'` and got 0. The type is *named* "Open Fire Hydrant Complaint". A new data trap for Day 11, whatever the model.
+- q008 wrote "36.71%" (the check accepts 36.7 or 37).
+
+**Not adopted yet**, because:
+- the combined setup (new model + vector search) hasn't been run;
+- the judge is this same model, so its 93.5% is self-graded (the deterministic checks, 84.4% → 90.9%, are the trustworthy part);
+- latency was measured hours apart on a variable free tier.
+
+The free daily quotas of both models ran out today (the baseline + these runs, plus judge calls), so the combined run waits for tomorrow.
+
+**Not run:** SQL agent thinking (`--sql-thinking low`) stopped on its first question at the daily quota. The outside comparison (Claude + OpenGov MCP) was **skipped** on the user's decision: it needs a paid Anthropic API key or a manual Claude Desktop run.
+
+**Latency:** the baseline ran during a Gemini overload (104 "high demand" errors); the experiment runs were faster (p50 2.4–3.6 s). p95 under `gemini-3.5-flash-lite` was 8.9 s, close to the ~8 s target. Comparisons across days aren't reliable on the free tier.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/experiments.py` | `build-fixed` (fixed-size chunk table), `retrieval` (6 configurations), `drop-fixed` |
+| `evals/run_evals.py` | `--model`, `--search-mode`, `--sql-thinking` (settings overridden through the environment) |
+| `app/retrieval.py` | `use_table()` for the chunking experiment; `search()` mode defaults to the setting |
+| `app/config.py` | `search_mode = "vector"` |
+| `ingest/load_docs.py` | `store(..., table=)` |
+| `evals/build_questions.py`, `questions.jsonl` | `key_phrase` per question |
+| `tests/test_retrieval.py` | Hybrid tests name their mode; default = vector + exact sections, no BM25 |
+| `evals/results/*-summary.json`, `experiments-retrieval.json` | The numbers above |
+| `README.md` | Experiments table; the skipped comparison |
+
+The `doc_chunks_fixed` table was dropped after the experiment (360.6 MB total again); `build-fixed` rebuilds it from cached embeddings.
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m evals.experiments build-fixed && .venv/bin/python -m evals.experiments retrieval && .venv/bin/python -m evals.experiments drop-fixed
+.venv/bin/python -c "import json; [print(l, json.load(open(f'evals/results/{l}-summary.json'))['all']['answer_checks']) for l in ('baseline','exp-search-vector','exp-model-3.5-flash-lite')]"
+```
+
+### Concepts
+
+- **Ablation:** removing or swapping one component (BM25, the reranker, section chunking) to see how much it contributes.
+- **Test-set reuse:** choosing settings by their score on the eval set slowly tunes the system to those 87 questions. With differences of 2–3 questions, prefer the change that also makes sense (here: BM25 matched common legal words) and keep the decision log.
+- **Self-preference:** a model judging its own answers tends to rate them higher, so a model change is compared on the deterministic checks first.
+
+---
+
 ## Day 10 (1/3): fix: several source ids in one citation bracket
 
 **Goal:** stop correct, cited answers from being turned into refusals.

@@ -4,6 +4,8 @@
   "minutes": 0.1,
   "errors": [],
   "model": "gemini-3.1-flash-lite",
+  "search_mode": "hybrid",
+  "sql_thinking_level": null,
   "judge_model": "gemini-3.5-flash-lite",
   "all": {
     "questions": 87,

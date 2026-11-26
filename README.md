@@ -66,8 +66,21 @@ The judge agreed with a hand check on 18 of 20 correctness verdicts and 20 of 20
 
 | System | Router | SQL | Recall@5 | Faithfulness | Correct refusals |
 | --- | --- | --- | --- | --- | --- |
-| Comparison: Claude + OpenGov MCP (Day 10) | n/a | – | n/a | – | – |
 | This project (first run, 2026-11-26) | 100% | 79.1% | 97.7% | 100% | 100% |
+
+The planned outside comparison (Claude + [OpenGov MCP](https://github.com/srobbin/opengov-mcp-server) on the same questions) was skipped: it needs a paid Anthropic API key or a manual Claude Desktop run.
+
+**Experiments** (Day 10, one change at a time on the same questions; details in `docs/BUILD_LOG.md`):
+
+| Change | SQL execution | Recall@5 | Answer checks | Decision |
+| --- | --- | --- | --- | --- |
+| Baseline (hybrid search, `gemini-3.1-flash-lite`) | 79.1% | 97.7% | 84.4% | |
+| Vector search instead of hybrid | 79.1% | **100%** | **87.0%** | **adopted** |
+| Reranker on (retrieval only) | | 72.7%* | | rejected |
+| Fixed 500-token chunks (retrieval only) | | 95.5%* | | rejected (no gain) |
+| Answer model `gemini-3.5-flash-lite` | **93.0%** | 97.7% | **90.9%** | pending a combined run |
+
+\* key-phrase relevance; hybrid scores 95.5% on the same measure.
 
 ## Data sources
 

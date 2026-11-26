@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Off by default: on the 10 Day 4 questions it lowered MRR from 0.88 to 0.62
     # (docs/BUILD_LOG.md). Day 10 compares rerankers on the full eval set.
     use_reranker: bool = False
+    # vector, keyword or hybrid. Vector won on the 87-question eval set (Day 10): recall@5
+    # 100% vs 95.5%, answer checks 87.0% vs 84.4%. Exact section lookup runs in every mode.
+    search_mode: str = "vector"
 
 
 @lru_cache
