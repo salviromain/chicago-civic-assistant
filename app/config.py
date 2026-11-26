@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     service_api_key: str = "change-me"
 
     # Model choices (compare Flash vs Pro in the evals)
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.1-flash-lite"  # 2.5 retired for new keys; 3.8/3.5 Flash took 268 s / 23 s on the free tier
+    llm_requests_per_minute: int = 8  # free tier allows 10 for Flash; stay under
     embedding_model: str = "gemini-embedding-001"
     embedding_dims: int = 768  # shortened from 3072: 4x smaller, fits pgvector's HNSW index
 

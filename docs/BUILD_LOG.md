@@ -4,6 +4,52 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 5 (1/3): one cached Gemini wrapper for every LLM call
+
+**Goal:** every text-generation call (SQL agent today; router, answers and the eval judge later) goes through one function that caches, paces and retries, so the free tier lasts and re-runs cost nothing.
+
+### What happened
+
+- **`gemini-2.5-flash` is gone for new API keys** (404: "no longer available to new users"). Listing the models this key can use and timing one short question on each:
+
+| Model | Time for one short question |
+| --- | --- |
+| gemini-3.8-flash | 268 s |
+| gemini-3.5-flash | 23 s |
+| **gemini-3.1-flash-lite** | **0.9 s** |
+
+- The plan's target is under ~8 s per question (p95), so the default is now **`gemini-3.1-flash-lite`**. The slow times are probably the free tier queueing requests to the bigger models, not the models themselves. Day 10 compares models on the full eval set; the model is one setting (`llm_model`).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/llm.py` | `generate(prompt, system, schema, model, temperature, thinking_budget)` → `LLMResult` (text, parsed object, token counts, cached, latency). Disk cache in `data/cache/llm/`, request pacing, retries |
+| `app/config.py` | `llm_model = "gemini-3.1-flash-lite"`, `llm_requests_per_minute = 8` |
+| `tests/test_llm.py` | 6 tests with a fake client: cache hit, new prompt = new call, JSON mode, per-minute 429 retried, daily quota stops at once, bad request not retried |
+
+### Step by step
+
+1. **Cache key** = SHA-256 of (model, system prompt, prompt, output schema, temperature, thinking budget). Change any of them and it's a new call; change none and the answer comes from `data/cache/llm/<key>.json`.
+2. **Pacing:** the same `MinuteBudget` the embeddings use, counting requests instead of tokens (8 per rolling minute).
+3. **Retries:** a per-minute 429 or a 5xx waits and tries again (10 s, 20 s, 40 s…). A **daily** quota raises `QuotaExhausted` at once: waiting minutes won't reset it. A 400 (bad request) is raised at once: it won't fix itself.
+4. **Structured output:** with `schema=SomePydanticModel`, Gemini must reply with JSON of that shape, and the reply is parsed and validated by Pydantic. Cached replies are validated the same way.
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_llm.py
+ls data/cache/llm | head      # one JSON file per distinct call
+```
+
+### Concepts
+
+- **Structured output:** instead of free text, the model is given a JSON schema (here generated from a Pydantic class) and must answer in that shape. The code gets fields (`sql`, `answerable`) instead of parsing prose.
+- **Thinking tokens:** newer Gemini models can "think" (write hidden reasoning) before answering. It can improve hard answers but adds time and is billed as output. `thinking_budget=0` turns it off where the model allows.
+- **Temperature:** how random the model's word choice is. 0 = (nearly) always the most likely answer, which makes caching and evals repeatable.
+
+---
+
 ## Day 4 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with what search actually does.
