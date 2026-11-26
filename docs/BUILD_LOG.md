@@ -4,6 +4,32 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 7 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 7. Week 1 (make it work end to end) is complete.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Build plan: Day 7 done (endpoints, error codes, usage and cost); Day 5 line: 34 check questions; Day 8 (eval set) next |
+
+### For Day 8
+
+- Write **new** questions: the 34 in `try_sql` and 19 in `try_answer` shaped the prompts, so scoring on them would overstate accuracy.
+- Fill in `q002` (still `TODO`).
+- Compute every expected answer by hand (SQL as `civic_reader`, the section text) before running the pipeline, as on Days 4–7.
+
+### Check it yourself
+
+Read "Build plan" in `CLAUDE.md`.
+
+### Concepts
+
+- **Held-out test set:** questions not used while building, so the score measures how the system handles questions it hasn't been tuned on.
+
+---
+
 ## Day 7 (2/3): a named 311 type means that type only
 
 **Goal:** fix a SQL agent mistake found while trying the API.
