@@ -4,6 +4,44 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 7 (2/3): a named 311 type means that type only
+
+**Goal:** fix a SQL agent mistake found while trying the API.
+
+### What happened
+
+"How many street light out complaints were there in ward 1 in 2026?" returned **568**: the agent counted all four street-light types (`SFD`, `SFK`, `SFQ`, `SFN`). "Street Light Out Complaint" is one type, `SFD`: **475** (checked by hand). The cause was my Day 5 audit rule "a category = every matching code", which didn't say what to do when the question names one specific type.
+
+The rule now has two cases:
+- **a specific type** named in the question = that one code ("street light out" = `SFD`, "stop sign" = `PCB`, "alley potholes" = `PHB`);
+- **a general category** ("street light complaints", "sign repairs") = every matching code.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `docs/TABLES.md` | The two cases, with examples |
+| `app/sql_agent.py` | Same rule in the prompt |
+| `scripts/try_sql.py` | Question 34: street light out in ward 1 = 475 |
+
+### Results
+
+- `scripts/try_sql`: **34/34** (the 33 earlier questions still pass), median 1.4 s per question.
+- `scripts/try_answer`: **19/19**, routes 19/19.
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m scripts.try_sql --quiet
+.venv/bin/python -m scripts.try_sql | grep -A4 "street light out"
+```
+
+### Concepts
+
+- **Rules interact:** a rule written for one failure ("use every code in a category") can cause a new one in a case it didn't consider. Every rule change reruns *all* the check questions, not just the one that prompted it.
+
+---
+
 ## Day 7 (1/3): the API: POST /query and GET /health, with clear errors and a time limit
 
 **Goal:** the Day 7 milestone: a question in through HTTP, a cited answer out, and failures that tell the client what happened instead of a bare "500 Internal Server Error".

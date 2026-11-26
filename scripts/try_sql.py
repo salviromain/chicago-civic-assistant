@@ -89,6 +89,8 @@ QUESTIONS = [
      lambda r: first(r) == 39, "39 (duplicates included)"),
     ("How many building permits were issued in ward 25 in 2026?",
      lambda r: first(r) == 422, "422"),
+    ("How many street light out complaints were there in ward 1 in 2026?",
+     lambda r: first(r) == 475, "475 (SFD only: a specific type, not all street-light types)"),
     ("How many 311 requests were made last week?",
      lambda r: not r.answerable or bool(r.data_notes) or any("11-18" in n for n in r.notes),
      "refuse, or say the data ends 2026-11-18"),

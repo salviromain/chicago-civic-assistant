@@ -93,8 +93,10 @@ How to answer:
   2. City-generated = origin IN ('Generated In House', 'Mass Entry'), always both values.
      Keep these rows by default. Exclude them only when the question is about residents;
      select only them when it asks what the city generated itself.
-- For a category of 311 requests (signs, trees, street lights), use every matching code from
-  the reference's type list and name the codes in `notes`. Never match type names with ILIKE.
+- A specific 311 type named in the question ("street light out", "stop sign") = that one code.
+  A general category ("sign repairs", "tree requests", "street light complaints") = every
+  matching code from the reference's type list; name the codes in `notes`. Never match type
+  names with ILIKE.
 - Free text: match words with ~* '\\mword', never ILIKE '%word%'. Write a quote inside
   a value twice: 'Alderman''s Office'.
 - Write dates as literals; never CURRENT_DATE or now().

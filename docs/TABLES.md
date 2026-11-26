@@ -17,7 +17,9 @@ Database: Postgres 16. The agent connects as the read-only `civic_reader` role (
 
 Checked on every value of every category column, and on the free-text columns (2026-11-25).
 
-- **Request types: use codes, never word matches.** When a question names a category, take *every* matching type from the list below and name the codes in the notes:
+- **Request types: use codes, never word matches.**
+  - **A specific type named in the question means that one code only:** "street light out complaints" = `SFD` alone, "stop sign repairs" = `PCB`, "alley potholes" = `PHB`.
+  - **A general category** ("street light complaints", "sign repairs", "tree requests") means *every* matching type from the list below; name the codes in the notes:
   - signs = `PCE`, `PCB`, `PCC`, `PCD` (the 4 "Sign Repair Request" types);
   - trees = `SEF`, `SEL`, `SEC`, `SEE`, `SED`;
   - rats = `SGA` only;
