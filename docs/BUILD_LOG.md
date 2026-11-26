@@ -4,6 +4,30 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 6 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 6.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Build plan: Day 6 done (how the pipeline fits together, results); Day 7 (FastAPI) next |
+
+### Still open for Day 7
+
+From the audit's risk list: map failures to clear errors (database down, daily quota used up, a reply that doesn't fit the schema → 503 with a message, not a 500), and give each request a time budget so retries can't hold it for a minute.
+
+### Check it yourself
+
+Read "Build plan" in `CLAUDE.md`; the numbers match the previous entry.
+
+### Concepts
+
+- **Milestone:** Day 7's goal ("question in through the API, cited answer out") now only needs the web layer: the pipeline itself works end to end.
+
+---
+
 ## Day 6 (2/3): router and cited answers, end to end
 
 **Goal:** one function, `answer(question)`, that routes the question, gathers the sources and returns a short answer citing them, or refuses.
