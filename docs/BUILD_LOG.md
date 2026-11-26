@@ -4,6 +4,32 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 8 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 8.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Build plan: Day 8 done (what's in the set, how it's built and matched); Day 9 (harness) next |
+
+### For Day 9
+
+- One full run is about 87 × 3 ≈ 260 Gemini calls, paced at 8 a minute: roughly 35 minutes uncached, then free to re-run from the cache.
+- Report scores with and without the `seen-in-tuning` questions.
+- Each metric's inputs are already in the set: `route` (router accuracy), `reference_sql` / `reference_result` (SQL execution accuracy), `source_chunks` (recall@5, MRR), `answer_must_contain` (correctness), `answerable` (correct refusals), `reference_answer` (for the LLM judge).
+
+### Check it yourself
+
+Read "Build plan" in `CLAUDE.md`.
+
+### Concepts
+
+- **Baseline:** the first full score, recorded before any change, so every later experiment (Day 10) is a before/after comparison.
+
+---
+
 ## Day 8: the eval set, 87 questions with computed answers
 
 **Goal:** a fixed set of questions, with the right route, answer and sources for each, that Day 9 scores the system on. They must be **new**: the 53 questions in `scripts/try_sql.py` and `scripts/try_answer.py` shaped the prompts, so scoring on them would overstate accuracy.

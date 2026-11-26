@@ -59,8 +59,8 @@ Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 mak
 
 **Week 2: make it good and live**
 
-- **Day 8 (next), eval set:** ~80 questions (~30 SQL, ~30 docs, ~10 both, ~10 unanswerable) with answers, routes, SQL and source chunks, in `evals/questions.jsonl`.
-- Day 9, eval harness: compute every metric; LLM judge, hand-check 20 verdicts; record the baseline.
+- Day 8, eval set: done. 87 questions in `evals/questions.jsonl` (33 sql, 34 docs, 10 both, 10 unanswerable), built by `python -m evals.build_questions` (reference SQL run as civic_reader; each expected chunk checked for its key phrase; `--check` reports drift). q001–q004 are tagged `seen-in-tuning`. Answers are matched with `evals.run_evals.must_contain_ok` (numbers as whole numbers).
+- **Day 9 (next), eval harness:** compute every metric; LLM judge, hand-check 20 verdicts; record the baseline.
 - Day 10, experiments, one change at a time: chunking (500 tokens vs. by section), search (embeddings vs. keyword vs. hybrid), reranker off/on, Gemini models (3.1 Flash Lite vs. bigger ones, if the free tier answers in time). Then score the baseline (Claude + OpenGov MCP) on the same set.
 - Day 11, fix failures: group wrong answers by cause, fix the biggest group, re-run, record the gain.
 - Day 12, production pieces: API key and rate limiting; log latency, tokens and cost per request; Dockerfile.
