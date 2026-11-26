@@ -255,6 +255,7 @@ def main() -> None:
     load_dotenv(find_dotenv(usecwd=True))
     p = argparse.ArgumentParser()
     p.add_argument("--label", default="run")
+    p.add_argument("--questions", default=str(QUESTIONS), help="question file (evals/questions_holdout.jsonl for the final score)")
     p.add_argument("--subset", type=int, help="only the first N questions")
     p.add_argument("--ids", help="comma-separated question ids")
     p.add_argument("--no-judge", action="store_true")
@@ -284,7 +285,7 @@ def main() -> None:
     from app.answer import run
     from app.llm import QuotaExhausted
 
-    qs = load_questions()
+    qs = load_questions(Path(args.questions))
     if args.ids:
         wanted = set(args.ids.split(","))
         qs = [q for q in qs if q["id"] in wanted]

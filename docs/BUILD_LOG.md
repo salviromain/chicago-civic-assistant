@@ -4,6 +4,43 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (1/5): 15 held-out questions, written before any Day 11 fix
+
+**Goal:** keep a fair final test. The 87 eval questions have now guided decisions (Day 9's scoring fixes, Day 10's choice of vector search) and will guide Day 11's fixes, so a score on them slowly stops measuring how the system handles questions it hasn't seen.
+
+### What's in it
+
+`evals/questions_holdout.jsonl`, built the same way as the main set (reference SQL run as `civic_reader`, key phrases verified in the chunks): 7 table, 4 document, 2 both, 2 unanswerable.
+
+- Table: alley potholes (`PHB`), the ward with most abandoned vehicles, street light pole damage, the median time to close rat complaints, violations from periodic inspections, renovation permits, and **"water on street complaints still open"**, where "open" really is the status (the mirror image of the "Open Fire Hydrant Complaint" trap).
+- Documents: when a landlord must say which bank holds the deposit (14 days), the lockout fine ($200 to $500 a day), the Planning and Development budget, paying for heating energy (14X-8-802.2.1).
+- Both: February heat violations + the June 1 end date; Streets and Sanitation requests + its budget.
+- Unanswerable: violations by community area; rat complaints in 2024.
+
+**This commit comes before any Day 11 change**, so the history shows the questions weren't written to fit the fixes. They're run **once**, at the end of Day 11.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/build_questions.py` | `HOLDOUT` list; `--holdout` writes `questions_holdout.jsonl` |
+| `evals/questions_holdout.jsonl` | The 15 questions |
+| `evals/run_evals.py` | `--questions <file>` |
+| `tests/test_evals.py` | 15 questions, no id shared with the main set, every reference passes its own checks |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m evals.build_questions --holdout --check
+git log --oneline -- evals/questions_holdout.jsonl     # committed before the Day 11 fixes
+```
+
+### Concepts
+
+- **Holdout set:** questions locked away while you tune, used once for the final number. If you look at it, adjust and look again, it becomes another tuning set.
+
+---
+
 ## Day 10 done (mostly): CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 10, including what's still to run.

@@ -100,3 +100,14 @@ def test_summary_rates():
     assert s["correctness_judge"] == (0.5, 2)
     assert s["latency_measured_on"] == 2          # the cached question isn't timed
     assert s["mrr"] == (0.5, 1)
+
+
+def test_holdout_set_shape():
+    from pathlib import Path
+    qs = load_questions(Path("evals/questions_holdout.jsonl"))
+    assert len(qs) == 15 and all(q["id"].startswith("h") for q in qs)
+    main_ids = {q["id"] for q in load_questions()}
+    assert not main_ids & {q["id"] for q in qs}
+    for q in qs:
+        if q["answerable"]:
+            assert must_contain_ok(q["reference_answer"], q["answer_must_contain"]), q["id"]

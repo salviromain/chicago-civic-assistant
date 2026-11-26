@@ -26,6 +26,7 @@ from dotenv import find_dotenv, load_dotenv
 
 AS_OF = "2026-11-25"
 OUT = Path(__file__).parent / "questions.jsonl"
+HOLDOUT_OUT = Path(__file__).parent / "questions_holdout.jsonl"
 
 NOT_DUP = "NOT duplicate"
 Y2025 = "created_date >= '2025-01-01' AND created_date < '2026-01-01'"
@@ -380,15 +381,71 @@ Q: list[dict] = [
 ]
 
 
+# ---- held out (Day 11) ------------------------------------------------------
+# Written before any Day 11 fix and run once, at the end, for the final score: the 87
+# above have guided several decisions (Days 9-11), so they are no longer a fair test.
+
+HOLDOUT: list[dict] = [
+    dict(id="h01", q="How many alley pothole complaints were made in 2025?", route="sql",
+         sql=f"SELECT count(*) FROM service_requests_311 WHERE sr_short_code = 'PHB' AND {NOT_DUP} AND {Y2025}",
+         answer=lambda r: f"{r[0][0]:,}.", must=lambda r: [num(r[0][0])]),
+    dict(id="h02", q="Which ward had the most abandoned vehicle complaints in 2026?", route="sql",
+         sql=f"SELECT ward, count(*) FROM service_requests_311 WHERE sr_short_code = 'SKA' AND {NOT_DUP} AND {Y2026} AND ward IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 3",
+         answer=lambda r: f"Ward {r[0][0]}, with {r[0][1]:,} complaints.", must=lambda r: [[str(r[0][0])]]),
+    dict(id="h03", q="How many street light pole damage complaints were there in ward 3 in 2025?", route="sql",
+         sql=f"SELECT count(*) FROM service_requests_311 WHERE sr_short_code = 'SFK' AND ward = 3 AND {NOT_DUP} AND {Y2025}",
+         answer=lambda r: f"{r[0][0]:,}.", must=lambda r: [num(r[0][0])]),
+    dict(id="h04", q="What was the median number of days to close rat complaints in 2026?", route="sql",
+         sql=f"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM closed_date - created_date) / 86400) FROM service_requests_311 WHERE sr_short_code = 'SGA' AND status = 'Completed' AND {NOT_DUP} AND {Y2026}",
+         answer=lambda r: f"About {r[0][0]:.1f} days.", must=lambda r: [dec(r[0][0])]),
+    dict(id="h05", q="How many building violations recorded in 2026 came from periodic inspections?", route="sql",
+         sql="SELECT count(*) FROM building_violations WHERE inspection_category = 'PERIODIC' AND violation_date >= '2026-01-01' AND violation_date < '2027-01-01'",
+         answer=lambda r: f"{r[0][0]:,}.", must=lambda r: [num(r[0][0])]),
+    dict(id="h06", q="How many renovation or alteration permits were issued in 2025?", route="sql",
+         sql="SELECT count(*) FROM building_permits WHERE permit_type = 'PERMIT - RENOVATION/ALTERATION' AND issue_date >= '2025-01-01' AND issue_date < '2026-01-01'",
+         answer=lambda r: f"{r[0][0]:,}.", must=lambda r: [num(r[0][0])]),
+    dict(id="h07", q="How many water on street complaints are still open?", route="sql", tags=["trap:open-status"],
+         sql=f"SELECT count(*) FROM service_requests_311 WHERE sr_short_code = 'AAE' AND status = 'Open' AND {NOT_DUP}",
+         answer=lambda r: f"{r[0][0]:,} are open (duplicates excluded).", must=lambda r: [num(r[0][0])]),
+    dict(id="h08", q="If there's no written lease, how soon must a landlord tell the tenant which bank holds the security deposit?", route="docs",
+         chunks=["5-12-080#1"], phrase="within 14 days of receipt of the security deposit",
+         answer="Within 14 days of receiving the deposit, in writing (5-12-080).", must=[["14"]]),
+    dict(id="h09", q="What fine can a landlord get for locking a tenant out?", route="docs",
+         chunks=["5-12-160"], phrase="fined not less then $200.00 nor more than $500.00",
+         answer="$200 to $500, and each day it continues is a separate offense (5-12-160).", must=[["200"], ["500"]]),
+    dict(id="h10", q="What is the proposed 2027 budget for the Department of Planning and Development?", route="docs", tags=["trap:proposed"],
+         chunks=["budget-2027-p152-1"], phrase="Department of Planning and Development | 155,232,815 | 158,077,633",
+         answer="$158,077,633 (proposed).", must=[money(158077633), ["propos"]]),
+    dict(id="h11", q="Can my landlord make me pay for the gas or electricity that runs my heating?", route="docs",
+         chunks=["14X-8-802.2.1", "5-16-010"], phrase="the owner may require that the occupant secure the source of energy",
+         answer="Yes, the owner may require the occupant to pay for the energy that runs the heating equipment, except where heat comes from a plant shared by several units (14X-8-802.2.1); the owner must still provide working heating equipment.",
+         must=[["14X-8-802.2.1", "yes", "may require"]]),
+    dict(id="h12", q="How many heat violations were recorded in February 2026, and until what date each year must heat be supplied?", route="both",
+         sql=f"SELECT count(*) FROM building_violations WHERE {HEAT} AND violation_date >= '2026-02-01' AND violation_date < '2026-03-01'",
+         chunks=["14X-8-802.2.2"], phrase="to June 1st of the succeeding year",
+         answer=lambda r: f"{r[0][0]:,} heat violations in February 2026; heat must be supplied until June 1 (14X-8-802.2.2).",
+         must=lambda r: [num(r[0][0]), ["June 1"]]),
+    dict(id="h13", q="How many requests did Streets and Sanitation handle in 2026, and what is that department's proposed 2027 budget?", route="both",
+         sql=f"SELECT count(*) FROM service_requests_311 WHERE owner_department = 'Streets and Sanitation' AND {NOT_DUP} AND {Y2026}",
+         chunks=["budget-2027-p097-1"], phrase="Dept Total | 354,888,561 | 381,913,905",
+         answer=lambda r: f"{r[0][0]:,} requests; the proposed budget is $381,913,905.",
+         must=lambda r: [num(r[0][0]), money(381913905)]),
+    dict(id="h14", q="Which community area has the most building violations?", route="sql", answerable=False, tags=["trap:no-ward-in-violations"],
+         answer="Can't be answered: building violations have no community area column."),
+    dict(id="h15", q="How many rat complaints were there in ward 25 in 2024?", route="sql", answerable=False, tags=["trap:before-data"],
+         answer="Can't be answered: the data starts on 2025-01-01."),
+]
+
+
 def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def build(conn_rows, conn_chunks) -> list[dict]:
+def build(conn_rows, conn_chunks, questions: list[dict] | None = None) -> list[dict]:
     """Questions -> JSON records. conn_rows(sql) -> (columns, rows); conn_chunks(ids) -> {id: text}."""
     records, problems = [], []
     seen = set()
-    for d in Q:
+    for d in (Q if questions is None else questions):
         qid = d["id"]
         if qid in seen:
             problems.append(f"{qid}: duplicate id")
@@ -433,7 +490,9 @@ def main() -> None:
     load_dotenv(find_dotenv(usecwd=True))
     p = argparse.ArgumentParser()
     p.add_argument("--check", action="store_true", help="compare with the existing file; write nothing")
+    p.add_argument("--holdout", action="store_true", help="the 15 held-out questions -> questions_holdout.jsonl")
     args = p.parse_args()
+    out_path = HOLDOUT_OUT if args.holdout else OUT
 
     from app.db import connect_readonly, run_select
 
@@ -445,19 +504,19 @@ def main() -> None:
         with connect_readonly() as conn:
             return dict(conn.execute("SELECT id, text FROM doc_chunks WHERE id = ANY(%s)", [ids]).fetchall())
 
-    records = build(rows_of, chunk_texts)
+    records = build(rows_of, chunk_texts, HOLDOUT if args.holdout else Q)
     lines = [json.dumps(r, ensure_ascii=False) for r in records]
     if args.check:
-        old = OUT.read_text().splitlines() if OUT.exists() else []
+        old = out_path.read_text().splitlines() if out_path.exists() else []
         diff = sorted(set(lines) ^ set(old))
         print(f"{len(records)} questions; {'no differences' if not diff else f'{len(diff)} lines differ'}")
         sys.exit(1 if diff else 0)
-    OUT.write_text("\n".join(lines) + "\n")
+    out_path.write_text("\n".join(lines) + "\n")
     by = {}
     for r in records:
         key = r["route"] if r["answerable"] else "unanswerable"
         by[key] = by.get(key, 0) + 1
-    print(f"wrote {len(records)} questions to {OUT}: {by}")
+    print(f"wrote {len(records)} questions to {out_path}: {by}")
 
 
 if __name__ == "__main__":
