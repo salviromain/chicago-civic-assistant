@@ -4,6 +4,34 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 10 done (mostly): CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 10, including what's still to run.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Environment: the free quota per model per day and what one eval run costs. Build plan: Day 10 results, decisions and the runs left; Day 11 next |
+
+### Left from Day 10 (needs fresh daily quotas)
+
+1. **Combined run:** `gemini-3.5-flash-lite` answering + vector search, judged by `gemini-3.1-flash-lite` (so no model grades itself). The judge change needs its own check: `review_judge --canary` and a fresh 20-verdict hand check.
+2. **SQL agent thinking** `low` (the experiment that hit the quota).
+3. A **latency** measurement on one normal day, for the model decision.
+
+Then Day 11 starts from the combined run's failures, including the new "Open Fire Hydrant Complaint" trap (q014).
+
+### Check it yourself
+
+Read "Build plan" in `CLAUDE.md`.
+
+### Concepts
+
+- **Rate-limited experiments:** on a free tier, plan runs by quota: each experiment only pays for questions whose prompts changed (the cache covers the rest), so order experiments to share as much as possible.
+
+---
+
 ## Day 10 (2/3): experiments: chunking, search, reranker, model
 
 **Goal:** change one thing at a time, score it on the same 87 questions, and keep only what helps.
