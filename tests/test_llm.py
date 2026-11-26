@@ -107,3 +107,26 @@ def test_empty_reply_is_an_error_not_a_cache_entry(tmp_path):
 def test_cache_is_in_the_project_folder():
     from app.config import PROJECT_ROOT
     assert llm.CACHE_DIR == PROJECT_ROOT / "data" / "cache" / "llm" and llm.CACHE_DIR.is_absolute()
+
+
+class ReadTimeout(Exception):
+    """Same name as httpx's timeout error."""
+
+
+def test_stalled_call_is_retried_at_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm.time, "sleep", lambda s: pytest.fail("no waiting after a timeout"))
+    client = FakeClient([ReadTimeout("read timed out"), "ok"])
+    assert ask(tmp_path, client).text == "ok" and len(client.calls) == 2
+
+
+def test_timeouts_give_up_after_three_tries(tmp_path):
+    client = FakeClient([ReadTimeout("t")] * 3 + ["never"])
+    with pytest.raises(ReadTimeout):
+        ask(tmp_path, client)
+    assert len(client.calls) == 3
+
+
+def test_rate_limit_still_retried_after_reordering(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    client = FakeClient([errors.ServerError(503, {"error": {"code": 503, "message": "busy"}}), "ok"])
+    assert ask(tmp_path, client).text == "ok"

@@ -4,6 +4,49 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 6 (1/3): cut off stalled Gemini calls
+
+**Goal:** stop one slow free-tier call from making a question take a minute.
+
+### What happened
+
+Timing six fresh questions one at a time (20 s apart, so the request pacer never waited: `waited` was 0 ms every time):
+
+| Question | Before | After |
+| --- | --- | --- |
+| Potholes in ward 25 (sql) | 14.2 s (answer call 10.3 s) | 3.5 s |
+| Minimum temperature (docs) | 5.2 s | 1.8 s |
+| Heat violations + heat rule (both) | 18.7 s (router call 16.2 s) | 6.1 s |
+| Violations in ward 25 (refusal) | 2.8 s | 2.7 s |
+| Library budget (docs) | **74.2 s** (answer call 67.6 s) | 8.1 s |
+| Open rat complaints (sql) | 3.5 s | 10.6 s (router call 8.5 s) |
+
+Most calls take about 1 s, but on the free tier one sometimes stalls for up to a minute. Waiting doesn't help; a fresh call usually comes back at once. Each call is now cut off after **12 s** and retried immediately, at most 3 tries. Some variance remains (an 8.5 s router call); Day 10 measures p95 on the full eval set.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/llm.py` | One client per process, with `HttpOptions(timeout=12 s)`; a timed-out call is retried at once (3 tries). `waited_ms` records time spent in the pacer |
+| `app/config.py` | `llm_timeout_s = 12` |
+| `tests/test_llm.py` | Stalled call retried with no waiting; gives up after 3; 503 still retried |
+
+While adding it I first put the general `except Exception` (for timeouts) *before* `except APIError`, which would have swallowed rate limits and server errors. The order is fixed and a test covers it.
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_llm.py
+```
+
+### Concepts
+
+- **Timeout:** the longest you'll wait for a reply before giving up. Without one, a hung request blocks forever (or for the server's limit).
+- **Tail latency:** the slowest requests (the 95th or 99th percentile), not the typical one. One 67 s call in twenty is invisible in the median and dominates p95.
+- **`except` order:** Python checks `except` clauses top to bottom and uses the first that matches. A broad one (`Exception`) placed first catches everything, so specific ones must come before it.
+
+---
+
 ## Audit (5/5): what can still go wrong, and which day handles it
 
 **Goal:** record the risks found in the audit that aren't fixed yet, so each later day picks them up. `CLAUDE.md` gets the new data traps.

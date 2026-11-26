@@ -18,6 +18,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,7 @@ class LLMResult:
     thinking_tokens: int = 0     # Gemini 2.5 "thinks" before answering; billed as output
     cached: bool = False
     latency_ms: int = 0          # time the API call took (kept in the cache too)
+    waited_ms: int = 0           # time spent waiting for the per-minute budget
 
 
 def cache_key(model: str, system: str | None, prompt: str, schema: type[BaseModel] | None,
@@ -69,19 +71,28 @@ def _minute_budget() -> MinuteBudget:
     return _budget
 
 
+@lru_cache(maxsize=1)
 def _client():
+    """One client per process. Calls that hang are cut off after llm_timeout_s."""
     from google import genai
+    from google.genai import types
 
     from app.config import get_settings
-    key = os.getenv("GEMINI_API_KEY") or get_settings().gemini_api_key
+    s = get_settings()
+    key = os.getenv("GEMINI_API_KEY") or s.gemini_api_key
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set (add it to .env)")
-    return genai.Client(api_key=key)
+    return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=s.llm_timeout_s * 1000))
+
+
+def _is_timeout(error: Exception) -> bool:
+    return "timeout" in type(error).__name__.lower()  # httpx ReadTimeout, ConnectTimeout, ...
 
 
 def _call_with_retry(client, model: str, prompt: str, config, attempts: int = 5):
-    """One generate_content request. Retries per-minute limits (429) and server
-    errors (5xx); a daily quota or a bad request is raised at once."""
+    """One generate_content request. Retries per-minute limits (429), server
+    errors (5xx) and calls that timed out; a daily quota or a bad request is
+    raised at once."""
     from google.genai import errors
     for attempt in range(attempts):
         try:
@@ -98,6 +109,14 @@ def _call_with_retry(client, model: str, prompt: str, config, attempts: int = 5)
             wait = min(2 ** attempt * 10, 60) if e.code == 429 else min(2 ** attempt * 2, 16)
             print(f"  Gemini {e.code} ({quota}), retrying in {wait}s", flush=True)
             time.sleep(wait)
+        except Exception as e:
+            if not _is_timeout(e):
+                raise
+            # On the free tier a call sometimes stalls for a minute; a fresh one is usually fast
+            if attempt >= 2:
+                raise
+            print("  Gemini call timed out, retrying now", flush=True)
+            continue
 
 
 def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] | None = None,
@@ -126,8 +145,10 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
             thinking_config=(types.ThinkingConfig(thinking_budget=thinking_budget,
                                                   thinking_level=thinking_level)
                              if thinking_budget is not None or thinking_level else None))
+        t0 = time.perf_counter()
         with _budget_lock:
             (budget or _minute_budget()).wait_for(1)
+        waited_ms = round((time.perf_counter() - t0) * 1000)
         start = time.perf_counter()
         response = _call_with_retry(client or _client(), model, prompt, config)
         usage = response.usage_metadata
@@ -136,7 +157,7 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
             input_tokens=(usage and usage.prompt_token_count) or 0,
             output_tokens=(usage and usage.candidates_token_count) or 0,
             thinking_tokens=(usage and usage.thoughts_token_count) or 0,
-            latency_ms=round((time.perf_counter() - start) * 1000))
+            latency_ms=round((time.perf_counter() - start) * 1000), waited_ms=waited_ms)
         # Check the reply before caching it: a cut-off or empty reply must not be
         # stored, or every re-run would fail on it
         if not result.text.strip():
