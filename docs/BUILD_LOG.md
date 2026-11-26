@@ -4,6 +4,32 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 9 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 9.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Build plan: Day 9 done (how to run the harness, the baseline numbers, what the judge can and can't be trusted with, the biggest failure group); Day 10 next |
+
+### For Day 10
+
+- One change at a time, each scored on all 87 questions against `baseline-summary.json`.
+- Re-measure latency on a normal Gemini day before comparing models.
+- A full uncached run is ~260 answer-model calls + 87 judge calls; check the free daily quota first.
+
+### Check it yourself
+
+Read "Build plan" in `CLAUDE.md`.
+
+### Concepts
+
+- **Controlled experiment:** change one thing, keep everything else (questions, judge, date) fixed, so a score difference can be pinned on that change.
+
+---
+
 ## Day 9: the eval harness, the judge, and the baseline
 
 **Goal:** score the system on the 87 held-out questions with every metric in the plan, check that the LLM judge can be trusted, and record the baseline that Days 10 and 11 improve on.
