@@ -4,6 +4,26 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 5 done: CLAUDE.md updated
+
+**Goal:** keep the project briefing in step with Day 5.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Environment: default model `gemini-3.1-flash-lite`, all calls through `app/llm.generate`. Data traps: the precise city-generated rule. Build plan: Day 5 done with its results; Day 6 next; Day 10 compares Gemini models |
+
+### Check it yourself
+
+Read "Environment", "Data traps" and "Build plan" in `CLAUDE.md`; the numbers match the previous entry.
+
+### Concepts
+
+- **One source of truth per rule:** the city-generated rule now says the same thing in `CLAUDE.md` and `docs/TABLES.md`. Two different wordings are how the ambiguity crept in.
+
+---
+
 ## Day 5 (3/3): the SQL agent, checked on 16 questions against the real database
 
 **Goal:** turn a question into a safe SQL query, run it, and return the rows with the filters the answer must mention, or refuse when the tables can't answer.

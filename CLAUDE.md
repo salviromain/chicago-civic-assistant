@@ -20,7 +20,7 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 - Postgres + pgvector in Docker: `docker compose up -d db`. Verify with `.venv/bin/python scripts/check_db.py`.
 - Settings in `.env`, loaded with python-dotenv via `load_dotenv(find_dotenv(usecwd=True))`. See `.env.example`.
 - DB driver is **psycopg 3** (`import psycopg`), not psycopg2.
-- LLM is the **Gemini free tier**: cache LLM calls and keep eval runs small. Embeddings are limited to 30,000 tokens per minute; `ingest/load_docs.py` paces requests and caches every embedding in `data/cache/embeddings/`.
+- LLM is the **Gemini free tier**, default `gemini-3.1-flash-lite` (2.5 models are retired for new keys; the bigger 3.x Flash models took 23 to 268 s per call). Every call goes through `app/llm.generate`, which caches replies in `data/cache/llm/`; keep eval runs small. Embeddings are limited to 30,000 tokens per minute; `ingest/load_docs.py` paces requests and caches every embedding in `data/cache/embeddings/`.
 
 ## Rules
 
@@ -33,7 +33,7 @@ Layout: `app/` (API, router, SQL agent, retrieval, answer), `ingest/` (table and
 ## Data traps
 
 - **311 duplicates:** exclude `duplicate = true` unless the question asks for duplicates.
-- **311 origin:** `'Generated In House'` and `'Mass Entry'` requests are city-generated, not resident complaints.
+- **311 origin:** `'Generated In House'` and `'Mass Entry'` requests are city-generated. Keep them by default; exclude them only when the question is about residents ("complaint" alone doesn't count: many types are named "… Complaint").
 - **311 info-only calls and aircraft noise are not loaded** (space): refuse those questions.
 - **311 enum columns** (`sr_type`, `sr_short_code`, `owner_department`, `status`, `origin`): `ILIKE` needs `::text`; an unknown value is an error.
 - **building_violations has no ward column.** Ward questions can't be answered from it.
@@ -51,15 +51,15 @@ Two weeks, about 3 to 4 hours a day. Week 1 makes it work end to end; week 2 mak
 - Day 2, load the tables (from 2025-01-01) + `docs/TABLES.md`: done. Tables total 356 MB (`scripts/table_sizes.py`).
 - Day 3, load the documents: done. `doc_chunks` has 351 chunks (code: one per section, id = section number; budget: ~500 tokens per page), Gemini embeddings (768 numbers) and a full-text index.
 - Day 4, search: done. `app/retrieval.search(question, mode, rerank)`: vector + real BM25 + exact section lookup, merged with RRF. On 10 hand-checked questions (`python -m scripts.try_search`): hybrid 10/10 in the top 5, MRR 0.88. The bge-reranker-base cross-encoder lowered MRR to 0.62, so `use_reranker = False`; Day 10 compares rerankers on the full eval set.
-- **Day 5 (next), SQL agent:** table descriptions (`docs/TABLES.md`) + few-shot examples in the prompt; guardrails (SELECT-only check, read-only role, row limit).
-- Day 6, router and answer: router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
+- Day 5, SQL agent: done. `app/sql_agent.query_tables(question)`: prompt = `docs/TABLES.md` + refusal examples, structured `SqlPlan`, one repair on a fixable Postgres error. Guardrails: `app/sql_guard.check_sql` (sqlglot: one SELECT, the 3 tables, row limit), civic_reader, READ ONLY transaction, 15 s timeout (`app/db.py`). `python -m scripts.try_sql`: 16/16 (first run 14/16, fixed by making the city-generated rule precise), median 1.3 s.
+- **Day 6 (next), router and answer:** router returns SQL / docs / both as Pydantic structured output; answer prompt uses only the sources, cites them, refuses otherwise; one `answer(question)` function.
 - Day 7, FastAPI: `POST /query`, `GET /health`; Pydantic request/response (answer, route, citations, latency, cost). Milestone: question in through the API, cited answer out.
 
 **Week 2: make it good and live**
 
 - Day 8, eval set: ~80 questions (~30 SQL, ~30 docs, ~10 both, ~10 unanswerable) with answers, routes, SQL and source chunks, in `evals/questions.jsonl`.
 - Day 9, eval harness: compute every metric; LLM judge, hand-check 20 verdicts; record the baseline.
-- Day 10, experiments, one change at a time: chunking (500 tokens vs. by section), search (embeddings vs. keyword vs. hybrid), reranker off/on, Gemini Flash vs. Pro. Then score the baseline (Claude + OpenGov MCP) on the same set.
+- Day 10, experiments, one change at a time: chunking (500 tokens vs. by section), search (embeddings vs. keyword vs. hybrid), reranker off/on, Gemini models (3.1 Flash Lite vs. bigger ones, if the free tier answers in time). Then score the baseline (Claude + OpenGov MCP) on the same set.
 - Day 11, fix failures: group wrong answers by cause, fix the biggest group, re-run, record the gain.
 - Day 12, production pieces: API key and rate limiting; log latency, tokens and cost per request; Dockerfile.
 - Day 13, deploy and CI: move the database to Neon; deploy to Cloud Run; CI runs tests and a small eval subset on every PR.
