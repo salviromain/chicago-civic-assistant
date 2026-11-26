@@ -28,6 +28,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.sql_guard import ALLOWED_TABLES, UnsafeSQL, check_sql
+from app.sql_review import review_sql
 
 DATA_START = dt.date(2025, 1, 1)
 DATE_COLUMNS = {"service_requests_311": "created_date", "building_violations": "violation_date",
@@ -131,9 +132,11 @@ def question_prompt(question: str, today: dt.date) -> str:
     return f"Today is {today.isoformat()}.\nQuestion: {question}"
 
 
-def repair_prompt(question: str, today: dt.date, sql: str | None, error: str) -> str:
+def repair_prompt(question: str, today: dt.date, sql: str | None, error: str, review: bool = False) -> str:
+    what = "doesn't do what the question asks" if review else "failed"
+    label = "Problem" if review else "Error"
     return (question_prompt(question, today) +
-            f"\n\nYour previous query failed.\nQuery:\n{sql}\nError: {error}\n"
+            f"\n\nYour previous query {what}.\nQuery:\n{sql}\n{label}: {error}\n"
             "Fix the query (or set answerable=false if the tables can't answer).")
 
 
@@ -169,6 +172,15 @@ def query_tables(question: str, today: dt.date | None = None, *, model: str | No
             result.answerable = False
             result.refusal_reason = plan.refusal_reason or "These tables can't answer the question."
             break
+        # Review (Day 11): rules code can check, e.g. city-generated requests dropped
+        # although the question never mentions residents. One fix, never a block:
+        # on the last attempt the query runs anyway.
+        problems = review_sql(question, plan.sql) if attempt < MAX_ATTEMPTS - 1 else []
+        if problems:
+            message = " ".join(problems)
+            result.attempts.append(Attempt(sql=plan.sql, error=f"review: {message}"))
+            plan = ask(repair_prompt(question, today, plan.sql, message, review=True))
+            continue
         try:
             sql = check_sql(plan.sql, s.sql_row_limit)
             columns, rows, truncated = run(sql, s.sql_row_limit)

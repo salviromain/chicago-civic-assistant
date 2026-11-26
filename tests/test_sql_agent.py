@@ -41,11 +41,11 @@ def plan(sql, notes=()):
 
 
 def test_answerable_question_runs_checked_sql():
-    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311", ["Duplicates excluded"]))
+    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311 WHERE NOT duplicate", ["Duplicates excluded"]))
     db = fake_db((["count"], [[721]], False))
     r = query_tables("potholes?", TODAY, generate=llm, run=db, data_ends={})
     assert r.ok and r.rows == [[721]] and r.notes == ["Duplicates excluded"]
-    assert db.ran == ["SELECT COUNT(*) FROM service_requests_311 LIMIT 500"]
+    assert db.ran == ["SELECT COUNT(*) FROM service_requests_311 WHERE NOT duplicate LIMIT 500"]
     assert r.llm_calls == 1 and len(r.attempts) == 1
     assert "Today is 2026-11-25" in llm.prompts[0]
 
@@ -113,11 +113,29 @@ def test_coverage_note_before_the_start():
 
 
 def test_coverage_notes_reach_the_result():
-    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311 WHERE created_date >= '2026-11-16'"))
+    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311 WHERE NOT duplicate AND created_date >= '2026-11-16'"))
     db = fake_db((["count"], [[6889]], False))
     r = query_tables("last week?", TODAY, generate=llm, run=db, data_ends=ENDS)
     assert r.data_notes == []  # no end date in the SQL: nothing to flag
-    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311 WHERE created_date >= '2026-11-16' AND created_date < '2026-11-23'"))
+    llm = fake_llm(plan("SELECT count(*) FROM service_requests_311 WHERE NOT duplicate AND created_date >= '2026-11-16' AND created_date < '2026-11-23'"))
     db = fake_db((["count"], [[6889]], True))
     r = query_tables("last week?", TODAY, generate=llm, run=db, data_ends=ENDS)
     assert "ends on 2026-11-18" in r.data_notes[0] and "first 500 rows" in r.data_notes[1]
+
+
+def test_review_problem_gets_one_fix_then_runs():
+    drop = "SELECT count(*) FROM service_requests_311 WHERE NOT duplicate AND NOT origin IN ('Generated In House', 'Mass Entry')"
+    keep = "SELECT count(*) FROM service_requests_311 WHERE NOT duplicate"
+    llm = fake_llm(plan(drop), plan(keep))
+    db = fake_db((["count"], [[5443]], False))
+    r = query_tables("How many graffiti removal requests in 2025?", TODAY, generate=llm, run=db, data_ends={})
+    assert r.ok and r.rows == [[5443]] and len(db.ran) == 1 and "keep city-generated" in llm.prompts[1]
+    assert r.attempts[0].error.startswith("review:")
+
+
+def test_review_never_blocks_the_last_attempt():
+    drop = "SELECT count(*) FROM service_requests_311 WHERE NOT duplicate AND NOT origin IN ('Generated In House', 'Mass Entry')"
+    llm = fake_llm(plan(drop), plan(drop))  # the model insists
+    db = fake_db((["count"], [[4203]], False))
+    r = query_tables("How many graffiti removal requests in 2025?", TODAY, generate=llm, run=db, data_ends={})
+    assert r.ok and r.rows == [[4203]] and len(r.attempts) == 2

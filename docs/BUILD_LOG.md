@@ -4,6 +4,67 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (2/5): a SQL review in code for the rules the prompt couldn't hold
+
+**Goal:** fix the biggest failure group, city-generated requests dropped without reason, plus the other SQL meaning errors, in a way that doesn't depend on the model obeying a prompt.
+
+### The failures, grouped (current setup: `gemini-3.1-flash-lite` + vector search)
+
+| Group | Questions | Fix |
+| --- | --- | --- |
+| **1. City-generated requests excluded although the question never mentions residents** | q005, q012, q018, q075, q078, q079 (+ q006, q072: wrong filter, key value happened to match) | this entry |
+| 2. Other SQL meaning: duplicates left in (q010), violation rows counted instead of inspections (q023), median for "average" (q037), "open fire hydrant" read as `status = 'Open'` (q014, with the other model) | 4 | this entry |
+| 3. Unrounded numbers in the answer | q011, q033 | next entry |
+| 4. Partial answer where a refusal was expected (hot water temperature) | q084 | next entry |
+
+The prompt and `docs/TABLES.md` already state every one of these rules, and group 1 was "fixed" twice in prompt wording on Days 5 and 7. On new questions the model still broke it. So these rules are now **checked in code**.
+
+### How the review works
+
+`app/sql_review.review_sql(question, sql)` compares the question's words with the SQL. Each check fires only on a clear mismatch:
+
+| Check | Fires when |
+| --- | --- |
+| City-generated | the SQL excludes `'Generated In House'` / `'Mass Entry'` and the question doesn't mention residents, people, citizens, the public or city-generated requests |
+| Duplicates | a 311 count has no `duplicate` filter and the question isn't about reports, calls or duplicates |
+| Average / median | "average" asked, only `percentile_cont` used; or "median" asked, only `avg` used |
+| Inspections | a share or count of *inspections* without `inspection_number` |
+| Open fire hydrant | "open fire hydrant" (not "still open") with `status = 'Open'` |
+
+A problem goes back to the model **once**, with the instruction to fix it, exactly like a database error ("Your previous query doesn't do what the question asks…"). It **never blocks**: on the last attempt the query runs anyway, so a wrong check can cost one extra call but can't stop an answer.
+
+### Checked without new LLM calls
+
+- **On the saved queries of the baseline and vector runs:** it flags every group 1 and 2 failure (q005, q010, q012, q018, q023, q037, q075, q078) and two queries with the wrong filter whose number happened to match (q006, q072). The first version missed q079: "Public Health" matched the word "public". It now needs "the public".
+- **On the 34 tuned questions' cached queries** (all correct): it flags only one, "tree requests the city generated itself", whose query really has no duplicate filter (it gave the right number because those requests have no duplicates).
+
+**Not yet measured end to end:** the eval re-run stopped on the free daily quota after 4 questions, and no other Gemini model was usable (two timed out, one out of quota, one overloaded). It runs first thing after the quota resets (midnight Pacific).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_review.py` | `review_sql()`: the five checks |
+| `app/sql_agent.py` | Review before running; a problem becomes one repair attempt (`review: …` in `attempts`); `repair_prompt(review=True)` |
+| `tests/test_sql_review.py` | 17 tests: each eval mistake is caught; 9 correct queries (residents questions, city-generated-only, duplicates asked for, "still open", inspections counted right, other tables) pass untouched |
+| `tests/test_sql_agent.py` | One fix then run; never blocks the last attempt; two older tests now use correct queries |
+| `evals/review_judge.py` | `--canary --judge-model` (to check a new judge) |
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_sql_review.py
+.venv/bin/python -c "from app.sql_review import review_sql; print(review_sql('How many graffiti removal requests in 2025?', \"SELECT count(*) FROM service_requests_311 WHERE NOT duplicate AND NOT origin IN ('Generated In House','Mass Entry')\"))"
+```
+
+### Concepts
+
+- **Prompt rules vs. code rules:** a prompt asks; code checks. When a rule can be stated as a pattern over the question and the SQL, checking it in code makes it hold whatever the model does.
+- **Lint:** an automatic check for likely mistakes that doesn't stop the work, just points at them (here: sends them back for one fix).
+- **False positives:** a check that fires on correct work. Each check here was run against 34 known-correct queries before being trusted.
+
+---
+
 ## Day 11 (1/5): 15 held-out questions, written before any Day 11 fix
 
 **Goal:** keep a fair final test. The 87 eval questions have now guided decisions (Day 9's scoring fixes, Day 10's choice of vector search) and will guide Day 11's fixes, so a score on them slowly stops measuring how the system handles questions it hasn't seen.

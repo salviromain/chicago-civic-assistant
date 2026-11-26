@@ -80,7 +80,7 @@ CANARIES = {  # question id -> an answer with one claim the sources don't suppor
 }
 
 
-def canary() -> dict:
+def canary(model: str | None = None) -> dict:
     import datetime as dt
     from types import SimpleNamespace
 
@@ -92,7 +92,7 @@ def canary() -> dict:
         q = qs[qid]
         trace = run(q["question"], dt.date.fromisoformat(q["as_of"]))  # cached: the real sources
         trace.draft = SimpleNamespace(answer=fake)
-        verdict, _ = judge(q, trace)
+        verdict, _ = judge(q, trace, **({"model": model} if model else {}))
         caught[qid] = (not verdict.faithful) and any(planted in c for c in verdict.unsupported_claims)
     return {"planted": len(CANARIES), "caught": sum(caught.values()), "by_question": caught}
 
@@ -104,9 +104,10 @@ def main() -> None:
     p.add_argument("--label", default="baseline")
     p.add_argument("--score", action="store_true")
     p.add_argument("--canary", action="store_true")
+    p.add_argument("--judge-model", help="for --canary: the judge to test (default: run_evals.JUDGE_MODEL)")
     args = p.parse_args()
     if args.canary:
-        print(json.dumps(canary(), indent=2))
+        print(json.dumps(canary(args.judge_model), indent=2))
     elif args.score:
         print(json.dumps(score(args.label), indent=2))
     else:
