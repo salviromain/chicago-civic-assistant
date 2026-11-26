@@ -4,6 +4,76 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 6 (2/3): router and cited answers, end to end
+
+**Goal:** one function, `answer(question)`, that routes the question, gathers the sources and returns a short answer citing them, or refuses.
+
+### How it works
+
+1. **Router** (`app/router.py`): one Gemini call returns a `RouteDecision`: `sql`, `docs` or `both`. For `both` it also splits the question into a table part and a document part ("How many heat violations last winter?" + "What heat must landlords provide?"), because the SQL agent refuses law questions and search can't count. For a single route the question goes on **exactly as asked** (see below).
+2. **Sources, in parallel:** the SQL agent and/or hybrid search run at the same time on two threads.
+3. **Source ids:** the table result is `[T1]` (SQL, columns, up to 50 rows with long cells cut to 200 characters, the code-checked notes, then the model's notes); document chunks are `[D1]`–`[D5]`. A table refusal is passed on as "The tables can't answer this: <reason>".
+4. **Answer** (`app/answer.py`): Gemini writes 1–4 sentences from those sources only, citing ids inline, and sets `refused`. Rules include: copy numbers exactly; mention the filters and data limits; say "proposed" for the 2027 budget; heat violations cite 13-196-410 but the rule is 14X-8-802.2.2.
+5. **Citations built by code:** ids the model wasn't given are deleted; the rest become `[1]`, `[2]` in order of use, each with its source name, URL and snippet (the SQL for tables). **An answer that cites nothing becomes a refusal**, with the SQL agent's reason if it gave one.
+
+`run(question)` returns a `Trace` (route, sub-questions, SQL result, chunk ids, prompt, tokens, stage timings) for the evals; `answer(question)` returns just the `QueryResponse`.
+
+### What happened
+
+First run on 19 questions (6 sql, 7 docs, 2 both, 4 expected refusals): **15/19, routes 19/19.**
+
+| # | Failure | Cause | Fix |
+| --- | --- | --- | --- |
+| 12 | "When must a building run its air conditioning?" said the code doesn't say | The router reworded it ("… according to the municipal code"), which pushed 14X-8-803.6 out of the top 5. With the original wording it's 2nd | Single-route questions go to search and SQL unchanged |
+| 13 | "What does 13-196-410 require?" refused | Search found the heat rule, but it's labeled 14X-8-802.2.2, so the model concluded 13-196-410 wasn't there | Sources start with "section 13-196-410 is the old number of today's Section 14X-8-802.2.2" |
+| 16 | Dog license: answered, I expected a refusal | **My expectation was wrong:** the budget (pp. 75–76) says the City Clerk issues dog licenses; the answer said so and that the steps aren't in the sources | Expectation: either is fine |
+| 17 | Mayor: answered, I expected a refusal | **My expectation was wrong:** the mayor's letter on budget page 4 is signed "Brandon Johnson" | Expectation: answered, "Johnson" |
+
+Second run: **19/19, routes 19/19.** Then refusals were made more useful: "I can't answer that…" now continues with the SQL agent's reason ("The building_violations table does not contain a ward column.").
+
+**Faithfulness, read by hand:** every answer was compared with its sources. Two that looked like they might be paraphrased too freely were checked against the full section text and are faithful: 5-12-150 ("he shall recover possession or terminate the rental agreement") and 14X-8-802.2.2 (heat "from a heating plant used in common").
+
+### Results
+
+| | |
+| --- | --- |
+| Correct | 19/19 (first run 15/19) |
+| Routes | 19/19 |
+| Time, one question at a time (6 fresh questions) | 1.8 s to 10.6 s, median ~4.8 s |
+| Tokens per question (median) | ~3,700 for routing + answer (+ ~10,000 for the SQL agent's prompt) |
+| Gemini calls per question | 2 (docs) or 3 (sql, both) |
+
+These 19 questions shaped the fixes, so they're a check, not a score: the Day 8 eval set gives the score.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/router.py` | `route_question()` → `RouteDecision` (reasoning, route, sql_question, docs_question); prompt with source descriptions and 9 examples |
+| `app/answer.py` | `run()` → `Trace`, `answer()` → `QueryResponse`; source text, citation building, refusal rule, parallel sources, stage timings |
+| `scripts/try_answer.py` | 19 questions with expected route, refusal, required words and cited sections |
+| `tests/test_answer.py` | 10 tests with fakes: both-route split, docs skips SQL, uncited answer → refusal (with the SQL reason), id renumbering, row and cell caps, old-number note, question passed unchanged |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m scripts.try_answer            # every answer with its citations (cached: instant)
+.venv/bin/python -c "
+from dotenv import load_dotenv; load_dotenv()
+from app.answer import answer
+r = answer('How many open rat complaints are there, and what must landlords do about rats?')
+print(r.route, r.answer); [print(c.source, c.url) for c in r.citations]"
+```
+
+### Concepts
+
+- **Router:** a small first step that picks which tool handles a question. Cheap (~1 s) and easy to measure: route accuracy.
+- **Grounding:** the answer may only use the sources it was given, and every claim points to one. Code enforces the "points to one" part: an uncited answer is refused.
+- **Query rewriting:** changing a user's question before searching. It can help, but here it hurt: extra words ("according to the municipal code") match many chunks and dilute the specific ones.
+- **Partial answer:** answer what the sources support and say what's missing, instead of all-or-nothing.
+
+---
+
 ## Day 6 (1/3): cut off stalled Gemini calls
 
 **Goal:** stop one slow free-tier call from making a question take a minute.
