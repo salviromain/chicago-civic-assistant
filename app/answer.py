@@ -155,20 +155,29 @@ def doc_citation(c: dict) -> Citation:
     return Citation(source=doc_label(c), snippet=snippet, url=c.get("url"))
 
 
-_ID = re.compile(r"\[((?:T|D)\d+)\]")
+# A citation: [T1], [D3], or several ids in one bracket: [D1, D4], [T1; D2]
+_ID = re.compile(r"\[\s*((?:T|D)\d+(?:\s*[,;]\s*(?:T|D)\d+)*)\s*\]")
+
+
+def cited_ids(text: str) -> list[str]:
+    """Source ids cited in the text, in order of first use."""
+    ids: list[str] = []
+    for group in _ID.findall(text):
+        for sid in re.split(r"\s*[,;]\s*", group):
+            if sid not in ids:
+                ids.append(sid)
+    return ids
 
 
 def link_citations(text: str, available: dict[str, Citation]) -> tuple[str, list[Citation]]:
-    """[T1]/[D3] in the answer -> [1]/[2] in order of first use, plus the citation
-    list. Ids that weren't given to the model are removed."""
-    order: list[str] = []
-    for sid in _ID.findall(text):
-        if sid in available and sid not in order:
-            order.append(sid)
+    """[T1]/[D3] (or [D1, D4]) in the answer -> [1]/[2] in order of first use, plus the
+    citation list. Ids that weren't given to the model are removed."""
+    order = [sid for sid in cited_ids(text) if sid in available]
     number = {sid: i for i, sid in enumerate(order, 1)}
 
     def swap(m: re.Match) -> str:
-        return f"[{number[m.group(1)]}]" if m.group(1) in number else ""
+        ids = [s for s in re.split(r"\s*[,;]\s*", m.group(1)) if s in number]
+        return "".join(f"[{number[s]}]" for s in ids)
     text = _ID.sub(swap, text)
     text = re.sub(r"\]\s+\[", "][", text)        # "[1] [2]" -> "[1][2]"
     text = re.sub(r"[ \t]+([.,;:])", r"\1", text)  # space left before punctuation by a removed id
@@ -241,7 +250,7 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
 
     text, citations = link_citations(draft.answer, available)
     ids = {"T1": "T1", **{f"D{i}": c["id"] for i, c in enumerate(trace.chunks, 1)}}
-    trace.cited = [ids[sid] for sid in dict.fromkeys(_ID.findall(draft.answer)) if sid in available]
+    trace.cited = [ids[sid] for sid in cited_ids(draft.answer) if sid in available]
     refused = draft.refused
     if not refused and not citations:
         # An answer that cites nothing it was given can't be checked: refuse instead,

@@ -110,6 +110,13 @@ def test_link_citations_renumbers_and_drops_unknown_ids():
     assert text == "A [1]. B [2][1]. C." and [c.source for c in cites] == ["d2", "t"]
 
 
+def test_several_ids_in_one_bracket():
+    avail = {"T1": Citation(source="t"), "D1": Citation(source="d1"), "D4": Citation(source="d4")}
+    text, cites = link_citations("Police: $2,243,691,824 [D1, D4]. Count [T1; D9].", avail)
+    assert text == "Police: $2,243,691,824 [1][2]. Count [3]." and [c.source for c in cites] == ["d1", "d4", "t"]
+    assert ans.cited_ids("x [D1, D4] y [D1] z [T1]") == ["D1", "D4", "T1"]
+
+
 def test_sql_preview_is_capped_and_cells_cut():
     big = SqlResult(question="list", answerable=True, sql="SELECT x FROM building_violations",
                     columns=["comment"], rows=[["x" * 500]] * 80)

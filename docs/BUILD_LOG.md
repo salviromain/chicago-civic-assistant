@@ -4,6 +4,43 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 10 (1/3): fix: several source ids in one citation bracket
+
+**Goal:** stop correct, cited answers from being turned into refusals.
+
+### What happened
+
+In the model experiment (next entry), `gemini-3.5-flash-lite` answered "What does the 2027 budget propose for the Chicago Police Department?" with *"… is $2,243,691,824 [D1, D4]."*: right, and cited. But the citation parser only understood one id per bracket (`[D1]`), so it saw **no citation**, and the rule "an answer that cites nothing is refused" replaced it with "I can't answer that…". Same for the fire department question.
+
+The parser now reads `[D1, D4]` and `[T1; D2]` too, and writes them as `[1][2]`. Any model can write citations this way, so this is a bug fix, not tuning for one model.
+
+### Effect (re-scored from the cache, no new calls)
+
+| Run | Citation accuracy before | After | False refusals before | After |
+| --- | --- | --- | --- | --- |
+| Baseline | 98.7% | 98.7% | 0% | 0% |
+| Vector search | 97.4% | **100%** | 0% | 0% |
+| `gemini-3.5-flash-lite` | 92.0% | 96.1% | 2.6% | **0%** |
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/answer.py` | `cited_ids()`; `_ID` matches several ids per bracket; `link_citations` renumbers each |
+| `tests/test_answer.py` | `[D1, D4]` → `[1][2]`, `[T1; D9]` keeps only the id that was given |
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_answer.py
+```
+
+### Concepts
+
+- **Format robustness:** when code parses what a model writes, accept the reasonable variants (`[D1, D4]`, `[D1][D4]`), or one model's habit becomes a silent failure that looks like a model weakness.
+
+---
+
 ## Day 9 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 9.
