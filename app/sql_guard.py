@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 ALLOWED_TABLES = {"service_requests_311", "building_violations", "building_permits"}
 
@@ -29,7 +29,8 @@ BLOCKED_FUNCTIONS = {
     "pg_sleep", "pg_sleep_for", "pg_sleep_until", "pg_read_file", "pg_read_binary_file",
     "pg_ls_dir", "pg_stat_file", "lo_import", "lo_export", "lo_get", "set_config",
     "current_setting", "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf",
-    "dblink", "dblink_exec", "query_to_xml", "pg_advisory_lock",
+    "dblink", "dblink_exec", "query_to_xml", "pg_advisory_lock", "pg_advisory_xact_lock",
+    "nextval", "setval", "pg_notify", "txid_current", "pg_current_xact_id",
 }
 # Functions allowed in FROM, which sqlglot represents as tables
 TABLE_FUNCTIONS = {"generate_series", "exploding_generate_series", "unnest", "explode"}
@@ -47,7 +48,7 @@ class UnsafeSQL(ValueError):
 def _parse_one(sql: str) -> exp.Expression:
     try:
         trees = [t for t in sqlglot.parse(sql, read="postgres") if t is not None]
-    except ParseError as e:
+    except SqlglotError as e:  # ParseError, TokenError (e.g. an unclosed quote), ...
         raise UnsafeSQL(f"could not parse the SQL: {str(e).splitlines()[0]}") from None
     if len(trees) != 1:
         raise UnsafeSQL(f"exactly one statement is allowed (got {len(trees)})")

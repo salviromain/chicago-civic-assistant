@@ -4,6 +4,36 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Audit (1/5): the guard catches every parser error, and blocks sequence functions
+
+**Goal:** fix the two guard gaps found by attacking it before Day 6.
+
+### What happened
+
+- **A crash:** the agent wrote `origin = 'Alderman's Office'` (the apostrophe not doubled). sqlglot raised a *tokenizer* error, which the guard didn't catch (it only caught parse errors), so the whole run stopped instead of going to the repair step.
+- **`nextval()` got past the guard.** It changes a sequence (a write). The read-only transaction still refused it, but the guard should say so first.
+- **30 Postgres-specific queries** went through the guard and were run before and after its rewrite: regex `~*` with `\m`, doubled quotes, `FILTER`, `DISTINCT ON`, window functions, `LATERAL`, `percentile_disc`, `mode()`, `make_date`, `to_char`… **All gave identical results.** `pg_catalog.pg_sleep`, `pg_stat_activity` and `information_schema` were all rejected.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_guard.py` | Catches every sqlglot error (`SqlglotError`), so a bad query is always "rejected, with a reason", never a crash. Blocks `nextval`, `setval`, `pg_notify`, `txid_current`, `pg_advisory_xact_lock` |
+| `tests/test_sql_guard.py` | Unclosed quote → rejected; `nextval` → rejected |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -c "from app.sql_guard import check_sql; check_sql(\"SELECT 1 FROM service_requests_311 WHERE origin = 'Alderman's Office'\")"
+# UnsafeSQL: could not parse the SQL: ...
+```
+
+### Concepts
+
+- **Tokenizer vs. parser:** a parser works in two steps. The tokenizer cuts the text into pieces (words, numbers, quoted strings); the parser arranges them into a tree. An unclosed quote fails at the first step, so it raises a different error class. Catching the common base class (`SqlglotError`) covers both.
+
+---
+
 ## Day 5 done: CLAUDE.md updated
 
 **Goal:** keep the project briefing in step with Day 5.

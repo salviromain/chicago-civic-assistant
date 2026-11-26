@@ -34,6 +34,8 @@ def test_allows_read_only_queries(sql):
     ("COPY building_permits TO '/tmp/out.csv'", "only SELECT"),
     ("SET ROLE postgres", "only SELECT"),
     ("SELEC count(*) FROM building_permits", "could not parse"),
+    ("SELECT count(*) FROM service_requests_311 WHERE origin = 'Alderman's Office'", "could not parse"),
+    ("SELECT nextval('some_sequence')", "nextval"),
 ])
 def test_rejects_with_a_reason(sql, reason):
     with pytest.raises(UnsafeSQL, match=re.escape(reason)):
