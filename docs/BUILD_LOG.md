@@ -4,6 +4,38 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 14 (2/3): the README, for someone seeing the project for the first time
+
+**Goal:** a README that a recruiter or engineer can read in two minutes: what problem it solves, a demo, the results, how it works and why the answers can be trusted, then the details.
+
+### The new order
+
+1. One paragraph: what it does (Text-to-SQL + RAG, cited, refuses).
+2. The demo GIF and one example answer with its numbers.
+3. **The problem** it solves, in plain words.
+4. **Results:** first run, final and held-out, in one table, with the caveat about tuning on the eval set right under it.
+5. **How it works:** a diagram with the guardrails on it, and four points on what makes the answers trustworthy (the model never touches the database directly; rules checked in code; documented data traps; citations built by code).
+6. **Try it** (page and API), **run it locally**, **deployment**.
+7. The full evaluation and experiment tables, **limits**, the repository layout, data sources.
+
+Removed: the "work in progress" banner, "MCP" from the stack (never used), and a table that repeated the results. Every number was copied from `evals/results/*-summary.json` or the build log; the local setup steps were checked against the scripts' options (documents are downloaded by hand first).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `README.md` | Rewritten as above |
+
+### Check it yourself
+
+Open the repository page on GitHub: the GIF plays at the top.
+
+### Concepts
+
+- **Inverted pyramid:** the most important information first (what, does it work, how well), details after, so a reader who stops early still gets the point.
+
+---
+
 ## Day 14 (1/3): a web page to ask questions, served by the API
 
 **Goal:** something a person can use without `curl`: the live service had only the API and its `/docs` page.
