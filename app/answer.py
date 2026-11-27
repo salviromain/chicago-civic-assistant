@@ -56,6 +56,7 @@ SYSTEM = """You answer questions about Chicago using ONLY the sources given (tab
   violations [T1]." Use only ids that appear in the sources.
 - Numbers: copy them exactly from the table rows. Don't compute new figures beyond simple
   ones (a sum or difference of numbers shown); never estimate.
+- "Which ... the most": if several rows share the top value, it's a tie: name all of them.
 - Table results: mention the filters and limits in its notes that change the meaning
   (duplicates excluded, date range, "the data ends on ..."). Prefer the code-checked notes.
   Zero rows means none were recorded in this data, not that none exist.
@@ -101,14 +102,17 @@ class Trace:
 
 def _number(value) -> str:
     """Numbers as a person writes them: 42462228.9200002 -> 42,462,228.92;
-    6.985706 -> 6.99; 0.75834 -> 0.7583 (shares keep 4 significant digits)."""
+    8.4488 -> 8.449; 0.75834 -> 0.7583 (shares keep 4 significant digits).
+    Under 1,000 keeps 3 decimals: the answer rounds to one decimal itself, and rounding
+    an already rounded 8.45 gives 8.5 instead of 8.4 (Day 11, q037)."""
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, int):
         return f"{value:,}"
     if abs(value) < 1:
         return f"{value:.4g}"
-    return f"{value:,.2f}".rstrip("0").rstrip(".")
+    decimals = 3 if abs(value) < 1000 else 2
+    return f"{value:,.{decimals}f}".rstrip("0").rstrip(".")
 
 
 def _cell(value) -> str:

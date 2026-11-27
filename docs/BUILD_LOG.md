@@ -4,6 +4,41 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (4/7): two problems the first measured run found: ties and double rounding
+
+**Goal:** fix the two real failures left after the first Day 11 run (`day11-fixes`, 2026-11-26, the first on a paid key).
+
+### Ties hidden by LIMIT 1 (q021)
+
+"Which address had the most heat violations?" The agent wrote `ORDER BY count DESC LIMIT 1` and got one address, but two addresses **tie** with 4 violations each. The SQL review (`app/sql_review.py`) now flags any query ending in `ORDER BY ... LIMIT 1` and asks for the top 5 rows instead. The answer prompt adds: if several rows share the top value, name all of them. On the saved queries, the check flags exactly the five "which ... the most" questions (q006, q009, q012, q021, q029) and nothing else.
+
+### Double rounding (q037)
+
+Day 11 (3/7) formatted numbers to 2 decimals before the model saw them, and the prompt asks for one decimal in the answer. 8.4488 days was shown as `8.45`, and the model rounded that to **8.5**: rounding twice gives a different result than rounding once (8.4488 → 8.4). Numbers under 1,000 now keep 3 decimals (`8.449`), so rounding to one decimal comes out right. Money (over 1,000) keeps 2.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_review.py` | `TOP_ONE` check: `ORDER BY ... LIMIT 1` → ask for LIMIT 5 |
+| `app/answer.py` | `_number()`: 3 decimals under 1,000; prompt rule for ties |
+| `tests/test_sql_review.py` | The q021 query is caught; LIMIT 5 and LIMIT 10 lists are left alone |
+| `tests/test_answer.py` | `8.4488 → 8.449`, not `8.45` |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -c "from app.answer import _number; print(_number(8.448800409540189), _number(42462228.9200002))"
+.venv/bin/python -c "from app.sql_review import review_sql; print(review_sql('Which ward had the most permits?', 'SELECT ward, count(*) FROM building_permits GROUP BY 1 ORDER BY 2 DESC LIMIT 1'))"
+```
+
+### Concepts
+
+- **Ties:** when several rows share the top value, "the" top row is arbitrary. `LIMIT 1` silently picks one; asking for a few rows lets the answer see the tie.
+- **Double rounding:** rounding a number that was already rounded can push it across a boundary (8.4488 → 8.45 → 8.5). Round once, from the exact value.
+
+---
+
 ## Day 11 (paused): CLAUDE.md updated with the runs left
 
 **Goal:** record where Day 11 stopped, so it resumes in the right order.

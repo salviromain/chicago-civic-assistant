@@ -22,6 +22,9 @@ GRAF = "SELECT COUNT(*) FROM service_requests_311 WHERE sr_short_code = 'GRAF' A
      "SELECT count(*) FILTER (WHERE inspection_status = 'FAILED') / count(*) FROM building_violations", "DISTINCT inspection_number"),
     ("How many open fire hydrant complaints were made in July 2025?",
      "SELECT COUNT(*) FROM service_requests_311 WHERE sr_short_code = 'WBT' AND status = 'Open' AND NOT duplicate", "type name"),
+    ("Which address had the most heat violations recorded since 2025?",
+     "SELECT address, COUNT(*) AS n FROM building_violations WHERE violation_ordinance LIKE '%(13-196-410)%' "
+     "GROUP BY address ORDER BY n DESC LIMIT 1", "ties"),
 ])
 def test_catches_the_eval_mistakes(question, sql, words):
     problems = review_sql(question, sql)
@@ -43,6 +46,10 @@ def test_catches_the_eval_mistakes(question, sql, words):
      "SELECT count(DISTINCT inspection_number) FILTER (WHERE inspection_status = 'FAILED') FROM building_violations"),
     ("How many building violations were recorded in 2025?", "SELECT count(*) FROM building_violations"),
     ("How many building permits were issued in 2025?", "SELECT count(*) FROM building_permits"),
+    ("Which address had the most heat violations recorded since 2025?",
+     "SELECT address, count(*) AS n FROM building_violations GROUP BY address ORDER BY n DESC LIMIT 5"),
+    ("List the 10 wards with the most permits.",
+     "SELECT ward, count(*) FROM building_permits GROUP BY ward ORDER BY 2 DESC LIMIT 10"),
 ])
 def test_leaves_correct_queries_alone(question, sql):
     assert review_sql(question, sql) == []

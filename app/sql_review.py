@@ -23,6 +23,8 @@ RESIDENT_WORDS = re.compile(r"\bresidents?\b|\bpeople\b|\bthe public\b|\bcitizen
 REPORT_WORDS = re.compile(r"\breports?\b|\bcalls?\b|\bduplicates?\b|\bevery report\b|\bincluding duplicates\b", re.I)
 AVERAGE_WORDS = re.compile(r"\baverage\b|\bmean\b", re.I)
 MEDIAN_WORDS = re.compile(r"\bmedian\b|\btypical\b", re.I)
+# "Which address had the most ...": ORDER BY ... LIMIT 1 returns one row even when two tie
+TOP_ONE = re.compile(r"\bORDER\s+BY\b[^;]*\bLIMIT\s+1\s*;?\s*$", re.I)
 
 
 def review_sql(question: str, sql: str) -> list[str]:
@@ -60,4 +62,9 @@ def review_sql(question: str, sql: str) -> list[str]:
         problems.append(
             "'Open Fire Hydrant Complaint' is the type name (sr_short_code 'WBT'): 'open' here is "
             "not the status. Remove status = 'Open'.")
+
+    if TOP_ONE.search(s):
+        problems.append(
+            "LIMIT 1 hides ties: return the top 5 rows (LIMIT 5) in the same order, so the "
+            "answer can say whether several share first place.")
     return problems

@@ -129,5 +129,6 @@ def test_numbers_in_the_table_source_are_tidy():
     r = SqlResult(question="fees", answerable=True, sql="SELECT sum(total_fee) FROM building_permits",
                   columns=["sum", "share", "n", "days"], rows=[[42462228.9200002, 0.36705, 5443, 6.985706]])
     text = ans.sql_source_text(r)
-    assert "42,462,228.92 | 0.367 | 5,443 | 6.99" in text
+    assert "42,462,228.92 | 0.367 | 5,443 | 6.986" in text
+    assert ans._number(8.448800409540189) == "8.449"  # not 8.45, which the answer would round to 8.5
     assert ans._number(3.0) == "3" and ans._number(2989283995) == "2,989,283,995"
