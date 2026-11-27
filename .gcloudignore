@@ -1,0 +1,12 @@
+# What `gcloud run deploy --source .` uploads to Cloud Build: the same allow-list as
+# .dockerignore, so .env (secrets), data/ and .venv never leave this machine.
+*
+!Dockerfile
+!.dockerignore
+!app/
+!app/**
+!docs/
+docs/*
+!docs/TABLES.md
+!requirements.txt
+**/__pycache__

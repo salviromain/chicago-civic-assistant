@@ -4,6 +4,63 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (2/4): live on Cloud Run, next to the database
+
+**Goal:** a public HTTPS endpoint running the Day 12 image, with secrets from Secret Manager and the least access needed.
+
+### The pieces
+
+| Piece | What it is |
+| --- | --- |
+| **Cloud Run** service `civic-api`, region `us-east5` (Columbus, Ohio) | Runs the container on demand; scales to zero when idle. Ohio, because Neon is in `aws-us-east-2` (Ohio): each database round trip stays short. |
+| Service account `civic-api` | The identity the service runs as. Its only permission: read the three secrets. |
+| Service account `civic-build` | The identity Cloud Build uses to build the image (role **Cloud Run Builder**). The first deploy failed because the project's default build account lacked permissions; a dedicated account with one role is the safer fix than widening the default. |
+| Secrets `gemini-demo-key`, `service-api-key`, `readonly-database-url` | Given to the container as environment variables at startup. `service-api-key` is 256 random bits, generated straight into Secret Manager. |
+| `.gcloudignore` | Allow-list of what `gcloud run deploy --source .` uploads: `app/`, `docs/TABLES.md`, `requirements.txt`, `Dockerfile`, `.dockerignore`. `.env` and `data/` never leave the Mac. |
+| `scripts/deploy.sh` | The deploy command, with every setting explained |
+
+Settings: **one instance** (`--max-instances 1`: rate-limit counts are in memory), `TRUSTED_PROXIES=1`, 100 questions a day for the whole service (about what the free demo key's daily quota allows), 512 MB, 1 CPU. The Gemini key is the **free-tier** demo key from the separate project `civic-demo-516006`, which has billing off: strangers can't spend money.
+
+### Checked on the live service
+
+URL: `https://civic-api-408605137306.us-east5.run.app`
+
+| Check | Result |
+| --- | --- |
+| `GET /health` | `{"status":"ok","database":"ok"}` (Neon reachable as civic_reader) |
+| `POST /query` without the key | 401 |
+| docs / sql / both / refusal questions | All correct: 3.3 s, 20.5 s, 8.7 s, 0.2 s (spaced 25 s apart) |
+| Four questions in a row, fast | The 4th got a 504 after 30 s |
+| Logs | One JSON line per query in Cloud Logging, as fields (`status`, `latency_ms`, `llm_calls`, `route`, `error`, `client`) |
+
+**The free tier is the slow part.** The same pipeline on the paid key measured 2.3 s / 4.1 s (p50 / p95, Day 11). The free tier stalls at times: a local test with the demo key got four `504` server errors and a timeout on one call; the 20.5 s question had one call cut off at 12 s and retried. The CI dry run (Day 13, 3/4) measured p50 17 s / p95 35 s on the free key. The 504 in the fast burst was the app's own pacing (8 Gemini calls a minute, set for the free tier) plus a stalled call.
+
+### Check it yourself
+
+```bash
+curl -s https://civic-api-408605137306.us-east5.run.app/health
+K="$(gcloud secrets versions access latest --secret=service-api-key)"
+curl -s -X POST https://civic-api-408605137306.us-east5.run.app/query -H "X-API-Key: $K" \
+  -H "Content-Type: application/json" -d '{"question":"How much notice must my landlord give before entering?"}'
+gcloud logging read 'resource.labels.service_name="civic-api" AND jsonPayload.message="query"' --limit 5 \
+  --format="value(jsonPayload.status,jsonPayload.latency_ms,jsonPayload.route)"
+```
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `.gcloudignore` | New: upload allow-list |
+| `scripts/deploy.sh` | New: the deploy command |
+
+### Concepts
+
+- **Service account:** an identity for a program, not a person. Giving each program its own, with only the permissions it needs, limits what a leak or bug can reach.
+- **Cold start:** the first request after the service scaled to zero waits for a container to start (a few seconds here).
+- **`--allow-unauthenticated`:** Google lets anyone reach the URL; the app's own `X-API-Key` check and rate limits decide who gets answers.
+
+---
+
 ## Day 13 (1/4): the database on Neon, with a read-only role made by a script
 
 **Goal:** move the data to a hosted Postgres that Cloud Run can reach, without any password passing through a person.
