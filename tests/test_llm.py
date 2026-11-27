@@ -130,3 +130,15 @@ def test_rate_limit_still_retried_after_reordering(tmp_path, monkeypatch):
     monkeypatch.setattr(llm.time, "sleep", lambda s: None)
     client = FakeClient([errors.ServerError(503, {"error": {"code": 503, "message": "busy"}}), "ok"])
     assert ask(tmp_path, client).text == "ok"
+
+
+def test_cache_folder_can_be_set_in_settings(tmp_path, monkeypatch):
+    """LLM_CACHE_DIR points the cache elsewhere: a timing run with every call live."""
+    from app.config import get_settings
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "fresh"))
+    get_settings.cache_clear()
+    try:
+        llm.generate("How many?", model="m", client=FakeClient(["a"]), budget=NoWait())
+        assert len(list((tmp_path / "fresh").glob("*.json"))) == 1
+    finally:
+        get_settings.cache_clear()

@@ -122,7 +122,7 @@ def _call_with_retry(client, model: str, prompt: str, config, attempts: int = 5)
 def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] | None = None,
              model: str | None = None, temperature: float = 0.0,
              thinking_budget: int | None = None, thinking_level: str | None = None,
-             cache_dir: Path = CACHE_DIR,
+             cache_dir: Path | None = None,
              client=None, budget: MinuteBudget | None = None) -> LLMResult:
     """Ask Gemini. With `schema`, the reply must be JSON of that shape (structured
     output) and comes back parsed. Thinking (hidden reasoning before the answer):
@@ -130,6 +130,7 @@ def generate(prompt: str, *, system: str | None = None, schema: type[BaseModel] 
     thinking_budget N tokens for 2.5 models; None = the model's default."""
     from app.config import get_settings
     model = model or get_settings().llm_model
+    cache_dir = cache_dir or get_settings().llm_cache_dir or CACHE_DIR
     key = cache_key(model, system, prompt, schema, temperature, thinking_budget, thinking_level)
     f = cache_dir / f"{key}.json"
 

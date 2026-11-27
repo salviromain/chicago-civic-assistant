@@ -4,6 +4,36 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (6/7): LLM_CACHE_DIR, to time the pipeline with every call live
+
+**Goal:** measure real latency. Eval runs reuse cached replies: in `day11-ties`, the router and most SQL calls came from the cache and only the answer call was live, so its "0.85 s per question" measured one call, not the pipeline.
+
+### How
+
+A new setting, `llm_cache_dir` (environment variable `LLM_CACHE_DIR`), says where `app/llm.generate` keeps cached replies. Pointing it at an empty folder makes every call live for one run, without touching the real cache in `data/cache/llm/` (so earlier runs can still be re-scored from it for free).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/config.py` | `llm_cache_dir` setting (default: `data/cache/llm`) |
+| `app/llm.py` | `generate()` uses it when no `cache_dir` is passed |
+| `tests/test_llm.py` | The setting sends replies to the given folder |
+
+### Check it yourself
+
+```bash
+LLM_CACHE_DIR=/tmp/fresh-cache .venv/bin/python -m evals.run_evals --label latency --subset 5 --no-judge
+```
+
+(Makes about 15 live calls; on a paid key, under a cent.) Query embeddings still come from `data/cache/embeddings/`: one short call per new question, a fraction of a second.
+
+### Concepts
+
+- **Warm vs. cold cache:** a run with cached replies (warm) is fast and free but says nothing about speed; a cold run, with nothing cached, is what a new user's question costs in time.
+
+---
+
 ## Day 11 (5/7): the eval stops marking two kinds of correct answers wrong
 
 **Goal:** fix scoring false alarms found while reading the Day 11 failures. Changing the eval after seeing results can inflate the score, so each change below was checked against the source text, and the held-out set (scored once, later) is the outside check.
