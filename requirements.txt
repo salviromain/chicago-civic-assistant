@@ -1,7 +1,7 @@
 # What the API needs to run: this is all the Docker image installs.
 # Pinned to the versions tested, so a rebuild next month gets the same code.
 # Development (ingest, evals, tests): pip install -r requirements-dev.txt
-fastapi==0.163.2
+fastapi==0.165.0
 uvicorn[standard]==0.54.0
 pydantic==2.14.3
 pydantic-settings==2.16.3
