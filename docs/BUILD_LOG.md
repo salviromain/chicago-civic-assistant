@@ -4,6 +4,39 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (5): the first CI eval failed on Google's 504s: errored questions now get one retry
+
+**Goal:** make the CI eval fail for problems in this system, not for a moment when the free tier is overloaded.
+
+### What happened
+
+The first CI eval run (started from the Actions tab) failed: `FAILED: 2 questions errored`. Reproduced locally in a clean clone set up like CI: q014 and q037 got `504 DEADLINE_EXCEEDED` from Gemini's free tier, even after `app/llm.py`'s own retries (2, 4, 8 s). The answers that did come back were all right (6/6 checks, 2/2 refusals). The gate worked as written, but an outage at Google isn't a regression here.
+
+### The fix
+
+`run_evals` now retries the questions that errored, once, after a 30 s pause (`--retry-wait`, `-1` turns it off). A question that fails twice still fails the gate, so a real bug (which fails every time) can't hide behind the retry. The results file ends with one line per question, the retry's result replacing the error.
+
+Checked with a faked failure (cached replies, no calls): q038 errored, was retried, answered; the run passed with one line per question.
+
+Also: the GitHub actions moved to `@v7` (`checkout`, `setup-python`, `upload-artifact`), the current versions, which run on Node.js 24; v4/v5 gave "Node.js 20 is deprecated" warnings.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/run_evals.py` | `one_pass()`; errored questions retried once; final file rewritten in order; `--retry-wait` |
+| `.github/workflows/ci.yml` | Actions at v7 |
+
+### Check it yourself
+
+GitHub → Actions → CI → Run workflow; the log shows `retrying N errored question(s)` when the free tier stalls.
+
+### Concepts
+
+- **Flaky test:** one that fails sometimes without any change in the code, here because a remote service was overloaded. One retry absorbs that; a failure on every try is still reported.
+
+---
+
 ## Day 13 (4/4 so far): README and CLAUDE.md describe the deployment
 
 **Goal:** record where everything runs and what's left of Day 13.

@@ -267,6 +267,8 @@ def main() -> None:
     p.add_argument("--fail-under", type=float, help=(
         "exit with an error if answer checks or correct refusals fall below this share, "
         "or any question errored or wasn't run (CI uses 0.8)"))
+    p.add_argument("--retry-wait", type=int, default=30, help=(
+        "seconds to wait before retrying errored questions once (-1: don't retry)"))
     p.add_argument("--timing-from", help=(
         "results .jsonl of an earlier live run: re-scoring from the cache takes ~0 s per "
         "question, so take each question's timings from that run instead"))
@@ -297,10 +299,14 @@ def main() -> None:
         qs = qs[:args.subset]
     RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"{args.label}.jsonl"
-    recs, errors = [], []
+    results: dict[str, dict] = {}  # question id -> scored record, or {"id", "error"}
     start = time.perf_counter()
-    with out.open("w") as f:
-        for i, q in enumerate(qs, 1):
+    stopped = False
+
+    def one_pass(todo: list[dict], f) -> None:
+        """Run each question; record a score or the error. Stops on the daily quota."""
+        nonlocal stopped
+        for i, q in enumerate(todo, 1):
             today = dt.date.fromisoformat(q["as_of"])
             try:
                 trace = run(q["question"], today)
@@ -309,25 +315,41 @@ def main() -> None:
                     verdict, _ = judge(q, trace, model=args.judge_model)
             except QuotaExhausted as e:
                 print(f"\nstopped at {q['id']}: {e}\nRun the same command later: cached answers are reused.")
-                break
+                stopped = True
+                return
             except Exception as e:  # noqa: BLE001 - record it and go on
-                errors.append(q["id"])
-                f.write(json.dumps({"id": q["id"], "error": f"{type(e).__name__}: {e}"}) + "\n")
-                print(f"[{i}/{len(qs)}] {q['id']} ERROR {type(e).__name__}: {str(e)[:120]}")
+                results[q["id"]] = {"id": q["id"], "error": f"{type(e).__name__}: {e}"}
+                f.write(json.dumps(results[q["id"]]) + "\n")
+                print(f"[{i}/{len(todo)}] {q['id']} ERROR {type(e).__name__}: {str(e)[:120]}")
                 continue
             rec = score_one(q, trace, verdict)
             if q["id"] in timing and not rec["llm_calls"]:
                 rec.update(timing[q["id"]], timing_from=args.timing_from)
-            recs.append(rec)
+            results[q["id"]] = rec
             f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
             f.flush()
             marks = " ".join(k for k in ("route_ok", "sql_ok", "checks_ok", "refusal_ok", "citation_ok")
                              if k in rec and not rec[k])
             j = rec.get("judge", {})
-            print(f"[{i}/{len(qs)}] {q['id']} {rec['route']:4} {rec['latency_ms'] / 1000:5.1f}s "
+            print(f"[{i}/{len(todo)}] {q['id']} {rec['route']:4} {rec['latency_ms'] / 1000:5.1f}s "
                   f"{'refused' if rec['refused'] else 'answered'}"
                   f"{' judge=' + j['correctness'] + ('' if j['faithful'] else ' UNFAITHFUL') if j else ''}"
                   f"{'  FAILED: ' + marks if marks else ''}", flush=True)
+
+    with out.open("w") as f:  # written as it goes, so a crash keeps what's done
+        one_pass(qs, f)
+        # An error is usually the model service failing (a 504 from an overloaded free
+        # tier), not the system: retry those questions once. A second failure counts.
+        failed = [q for q in qs if "error" in results.get(q["id"], {})]
+        if failed and not stopped and args.retry_wait >= 0:
+            print(f"\nretrying {len(failed)} errored question(s) in {args.retry_wait} s", flush=True)
+            time.sleep(args.retry_wait)
+            one_pass(failed, f)
+    # The final file: one line per question, in order, the retry replacing the error
+    out.write_text("".join(json.dumps(results[q["id"]], ensure_ascii=False, default=str) + "\n"
+                           for q in qs if q["id"] in results))
+    recs = [r for r in results.values() if "error" not in r]
+    errors = [i for i, r in results.items() if "error" in r]
 
     if not recs:
         if args.fail_under is not None:
