@@ -4,6 +4,33 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 12 (3/3): CLAUDE.md: Day 12 done, Day 13 next
+
+**Goal:** record Day 12's state and what Day 13's deployment depends on.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Day 12 done (limits, logs, image); venv installs `requirements-dev.txt`; Day 13 deploys with `--max-instances 1` and `TRUSTED_PROXIES=1` |
+
+### Why Day 13 needs those two settings
+
+- **One instance:** the rate-limit counts live in the server's memory. With two instances, each would allow 5 a minute, so a client could get 10. One instance is plenty for a demo (4 questions at a time).
+- **`TRUSTED_PROXIES=1`:** on Cloud Run, the connection comes from Google's front end. Without it, every visitor would have the same address, and one person's questions would use everyone's limit.
+
+Left for Day 14 (optional): put cached replies for 5–6 example questions in the image, so the demo's examples answer instantly without using the free quota.
+
+### Check it yourself
+
+Read the Day 12 and Day 13 lines in `CLAUDE.md`.
+
+### Concepts
+
+- **Horizontal scaling:** running more copies of a server. State kept in one copy's memory (like rate-limit counts) isn't seen by the others; shared state needs a shared store (a database, Redis) — not needed at one instance.
+
+---
+
 ## Day 12 (2/3): a production Docker image: 438 MB, no secrets, no root
 
 **Goal:** an image Cloud Run can run (Day 13), built only from what the API needs.
