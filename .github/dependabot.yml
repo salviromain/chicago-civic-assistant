@@ -12,3 +12,8 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: {interval: weekly}
+    # A new Python version for the image (3.12 -> 3.15) is a deliberate, tested change:
+    # CI runs on 3.12 and doesn't build the image. Patch and security updates still come.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

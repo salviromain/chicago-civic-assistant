@@ -4,6 +4,47 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Dependabot's first pull requests: three merged after a real test, one closed
+
+**Goal:** handle the four pull requests Dependabot opened within a minute of being switched on.
+
+### Why CI's green check wasn't enough
+
+Dependabot's pull requests don't get the repository's secrets, so their `eval` job **skipped** (and a skipped step counts as a pass). Only the unit tests had run. A new Gemini SDK or FastAPI version can change behavior that unit tests fake away, so the three package updates were tested together, the way production runs them:
+
+| Check | Result |
+| --- | --- |
+| Fresh venv with fastapi 0.165.0, pydantic 2.14.4, google-genai 3.6.1 | Installs; Starlette unchanged (1.10.0) |
+| `pytest -q` | 186 passed |
+| Live eval, 20 questions, nothing cached (every call through the new SDK), paid key | 20/20 answer checks and refusals; the one SQL "miss" is q012, the known scorer false alarm; p50 2.9 s |
+| Docker image built with them | `/health` ok, page 200, no key 401 |
+
+Merged: #2 google-genai 3.5.0 → 3.6.1, #3 pydantic 2.14.3 → 2.14.4, #4 fastapi 0.163.2 → 0.165.0.
+
+Closed: #1 python 3.12-slim → 3.15-slim. A new Python version is a bigger change that CI doesn't cover (it runs on 3.12 and doesn't build the image). `dependabot.yml` now ignores minor and major Python updates for the image; patch and security updates still come through.
+
+**Not yet live:** Cloud Run still runs the image built before these updates, until the next deploy.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `requirements.txt` | The three updates (Dependabot's commits) |
+| `.github/dependabot.yml` | Ignore minor/major Python updates for the image |
+
+### Check it yourself
+
+```bash
+gh pr list --state all --limit 4
+```
+
+### Concepts
+
+- **A skipped check isn't a passed check:** look at what a green mark actually ran before trusting it.
+- **Semantic versioning:** MAJOR.MINOR.PATCH; patch = fixes, minor = new features (should be compatible), major = breaking changes. Automatic updates are safest at patch level.
+
+---
+
 ## Security pass: README "Security" section; live checks
 
 **Goal:** list the defenses where a reader looks, and record the live checks.
