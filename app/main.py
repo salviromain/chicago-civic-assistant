@@ -1,5 +1,6 @@
 """FastAPI entry point: run with `uvicorn app.main:app --reload`.
 
+    GET  /         a web page to ask questions (app/static/index.html)
     GET  /health   is the service up, and does the database answer?
     POST /query    {"question": "..."} -> cited answer (X-API-Key header required)
 
@@ -20,7 +21,10 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
 from app import __version__, logs
@@ -105,6 +109,22 @@ def database_ok() -> bool:
         return True
     except Exception:  # noqa: BLE001 - any failure means "not available"
         return False
+
+
+PAGE = Path(__file__).parent / "static" / "index.html"
+# The page uses only its own inline style and script and calls only this service:
+# the browser refuses anything else (scripts or frames from other sites)
+PAGE_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+                               "connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def page() -> HTMLResponse:
+    return HTMLResponse(PAGE.read_text(), headers=PAGE_HEADERS)
 
 
 @app.get("/health", response_model=HealthResponse)

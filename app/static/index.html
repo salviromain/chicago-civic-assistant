@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chicago Civic Data Assistant</title>
+<meta name="description" content="Ask about Chicago 311 requests, building violations and permits, the Municipal Code, and the proposed 2027 budget. Every answer cites its sources.">
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #5f5f5a; --line: #e2e1dc;
+    --accent: #1f5fae; --accent-text: #ffffff; --chip: #eef2f8; --warn-bg: #fff6e0; --warn: #7a5300;
+    --err-bg: #fdecec; --err: #9b1c1c; --code-bg: #f1f0ec; --focus: #1f5fae;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --panel: #1d1d1b; --text: #ecebe6; --muted: #a5a49d; --line: #34332f;
+      --accent: #7fb0f0; --accent-text: #0d1726; --chip: #23303f; --warn-bg: #3a2f12; --warn: #f2d38a;
+      --err-bg: #3b1a1a; --err: #f3b1b1; --code-bg: #262522; --focus: #7fb0f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  textarea, input { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+                    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  textarea { min-height: 84px; resize: vertical; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  a { color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  button.ask { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;
+               padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ask:disabled { opacity: .6; cursor: wait; }
+  .hint { color: var(--muted); font-size: .9rem; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+  .examples button { background: var(--chip); color: var(--text); border: 1px solid var(--line);
+                     border-radius: 999px; padding: 6px 12px; font: inherit; font-size: .9rem; cursor: pointer;
+                     text-align: left; }
+  details.key { margin-top: 14px; }
+  details.key summary { cursor: pointer; color: var(--muted); font-size: .95rem; }
+  details.key .row { margin-top: 8px; }
+  #result { margin-top: 20px; }
+  .answer { font-size: 1.05rem; white-space: pre-wrap; margin: 0; }
+  .answer a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: .85em;
+              vertical-align: super; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: .85rem; margin-top: 12px; }
+  .badge { border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
+  .refused { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .error { background: var(--err-bg); color: var(--err); border-radius: 8px; padding: 12px 14px; }
+  h2 { font-size: 1rem; margin: 22px 0 8px; }
+  ol.sources { margin: 0; padding-left: 22px; }
+  ol.sources li { margin-bottom: 12px; }
+  ol.sources li:target { background: var(--chip); border-radius: 6px; }
+  .src { font-weight: 600; overflow-wrap: anywhere; }
+  .src a { color: var(--accent); }
+  details.snip summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+  pre { background: var(--code-bg); border-radius: 8px; padding: 10px 12px; margin: 6px 0 0;
+        white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }
+  footer { color: var(--muted); font-size: .85rem; margin-top: 32px; }
+  footer p { margin: 0 0 8px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line);
+             border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+             vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chicago Civic Data Assistant</h1>
+  <p class="lede">Ask about 311 service requests, building violations and permits (2025 to November 2026),
+    the Municipal Code's heat and landlord-tenant chapters, and the proposed 2027 budget.
+    Every answer cites its sources, and it says so when the data can't answer.</p>
+
+  <form class="panel" id="form">
+    <label for="q">Your question</label>
+    <textarea id="q" maxlength="1000" required
+      placeholder="How many pothole complaints were made in ward 25 in 2026?"></textarea>
+    <ul class="examples" aria-label="Example questions">
+      <li><button type="button">What minimum temperature must my landlord keep my apartment at during the day?</button></li>
+      <li><button type="button">How many pothole complaints were made in ward 25 in 2026?</button></li>
+      <li><button type="button">Which address had the most heat violations recorded since 2025?</button></li>
+      <li><button type="button">How much notice must my landlord give before entering my apartment?</button></li>
+      <li><button type="button">What is the proposed 2027 budget for the Chicago Fire Department?</button></li>
+      <li><button type="button">How many heat violations were recorded in January 2026, and what heat must landlords provide at night?</button></li>
+    </ul>
+    <details class="key" id="keybox">
+      <summary>API key</summary>
+      <div class="row">
+        <input id="key" type="password" autocomplete="off" placeholder="X-API-Key" aria-label="API key">
+      </div>
+      <p class="hint">Kept in this browser only. Ask the owner for a key.</p>
+    </details>
+    <div class="row">
+      <button class="ask" id="ask" type="submit">Ask</button>
+      <span class="hint" id="status" role="status" aria-live="polite"></span>
+    </div>
+  </form>
+
+  <section id="result" aria-live="polite"></section>
+
+  <footer>
+    <p>Answers come from a language model reading the data and documents shown under each answer: check the sources.
+      The 2027 budget is proposed, not adopted. Not legal advice.</p>
+    <p>Questions are sent to Google's Gemini API (free tier), which may use them to improve its products. Don't include personal information.</p>
+    <p>Data: <a href="https://data.cityofchicago.org">Chicago Data Portal</a>, the Municipal Code of Chicago, the City's 2027 Budget Recommendations.
+      API: <a href="/docs">/docs</a>.</p>
+  </footer>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), q = $("q"), key = $("key"), ask = $("ask"), status = $("status"), result = $("result");
+  const store = {
+    get() { try { return localStorage.getItem("civic-api-key") || ""; } catch (e) { return ""; } },
+    set(v) { try { localStorage.setItem("civic-api-key", v); } catch (e) { /* private mode */ } },
+  };
+  key.value = store.get();
+  if (!key.value) $("keybox").open = true;
+
+  document.querySelectorAll(".examples button").forEach((b) =>
+    b.addEventListener("click", () => { q.value = b.textContent; q.focus(); }));
+
+  function el(tag, attrs, ...children) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
+    for (const c of children) n.append(c);
+    return n;
+  }
+
+  // "[1]" in the answer -> a link to source 1 (text only: nothing from the server becomes HTML)
+  function answerText(text, count) {
+    const p = el("p", { class: "answer" });
+    let last = 0;
+    for (const m of text.matchAll(/\[(\d+)\]/g)) {
+      p.append(text.slice(last, m.index));
+      const n = Number(m[1]);
+      p.append(n >= 1 && n <= count ? el("a", { href: "#src-" + n, "aria-label": "source " + n }, "[" + n + "]") : m[0]);
+      last = m.index + m[0].length;
+    }
+    p.append(text.slice(last));
+    return p;
+  }
+
+  function showAnswer(d, requestId, seconds) {
+    result.replaceChildren();
+    const box = el("div", { class: "panel" });
+    if (d.refused) box.append(el("div", { class: "refused" }, "The sources don't support an answer to this question."));
+    box.append(answerText(d.answer, d.citations.length));
+    const routes = { sql: "data tables", docs: "documents", both: "data tables + documents" };
+    const meta = el("div", { class: "meta" },
+      el("span", { class: "badge" }, "Answered from " + (routes[d.route] || d.route)),
+      el("span", {}, seconds.toFixed(1) + " s"));
+    if (d.usage) meta.append(el("span", {}, d.usage.llm_calls + " model calls"));
+    if (requestId) meta.append(el("span", {}, "request " + requestId));
+    box.append(meta);
+    if (d.citations.length) {
+      box.append(el("h2", {}, "Sources"));
+      const ol = el("ol", { class: "sources" });
+      d.citations.forEach((c, i) => {
+        const name = c.url ? el("a", { href: c.url, target: "_blank", rel: "noopener" }, c.source) : c.source;
+        const li = el("li", { id: "src-" + (i + 1) }, el("div", { class: "src" }, name));
+        if (c.snippet) {
+          const isSql = /^\s*(SELECT|WITH)\b/i.test(c.snippet);
+          li.append(el("details", { class: "snip" },
+            el("summary", {}, isSql ? "The SQL query that ran" : "Excerpt from the source"),
+            el("pre", {}, c.snippet)));
+        }
+        ol.append(li);
+      });
+      box.append(ol);
+    }
+    result.append(box);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    result.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
+  }
+
+  function showError(status, detail, retryAfter) {
+    const messages = {
+      401: "The API key is missing or wrong. Open “API key” above.",
+      422: "The question must be 3 to 1,000 characters.",
+    };
+    let text = messages[status] || detail || ("The service answered " + status + ".");
+    if (status === 429 && retryAfter) {
+      const s = Number(retryAfter);
+      text += " Try again in " + (s < 120 ? s + " s." : Math.ceil(s / 3600) + " h.");
+    }
+    if (status === 401) $("keybox").open = true;
+    result.replaceChildren(el("div", { class: "error", role: "alert" }, text));
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const question = q.value.trim();
+    if (!question) return;
+    store.set(key.value.trim());
+    ask.disabled = true;
+    status.replaceChildren(el("span", { class: "spinner", "aria-hidden": "true" }), "Looking it up… (usually a few seconds; the free model tier can take up to 30)");
+    const t0 = performance.now();
+    try {
+      const r = await fetch("/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": key.value.trim() },
+        body: JSON.stringify({ question }),
+      });
+      const seconds = (performance.now() - t0) / 1000;
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) showAnswer(body, r.headers.get("X-Request-ID"), seconds);
+      else showError(r.status, typeof body.detail === "string" ? body.detail : "", r.headers.get("Retry-After"));
+    } catch (e) {
+      showError(0, "The service can't be reached. Check your connection and try again.");
+    } finally {
+      ask.disabled = false;
+      status.textContent = "";
+    }
+  });
+})();
+</script>
+</body>
+</html>

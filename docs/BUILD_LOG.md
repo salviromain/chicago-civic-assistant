@@ -4,6 +4,51 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 14 (1/3): a web page to ask questions, served by the API
+
+**Goal:** something a person can use without `curl`: the live service had only the API and its `/docs` page.
+
+### The page (`app/static/index.html`, served at `/`)
+
+- A question box, six example questions (one click fills the box), and an **API key** field. The key is kept in the browser's **localStorage** (this browser only) and sent as `X-API-Key`; without it the page says how to get one.
+- The answer, with each `[1]`, `[2]` a link to its source; under it the route ("data tables + documents"), the time, the number of model calls and the request id (the same id as the server's log line).
+- Sources: the dataset or code section, linked to the original; for a table answer, the SQL that ran; for a document, an excerpt.
+- Clear messages for each error: 401 (key), 422 (length), 429 (with "try again in N s" from `Retry-After`), 502/503/504 (the server's own text).
+- A footer: answers come from a language model, check the sources; the 2027 budget is proposed; not legal advice; questions go to Gemini's free tier, which may use them.
+- Light and dark themes (follows the system), works on a phone, respects "reduce motion". No external scripts, fonts or trackers.
+
+### Safety
+
+- Nothing from the server is inserted as HTML: the answer and sources are added as **text** (`append`, never `innerHTML`), so an answer containing `<script>` would show as text, not run. A test checks the page has no `innerHTML`.
+- A **Content Security Policy** header tells the browser the page may load nothing from other sites and may only call this service (`connect-src 'self'`); it can't be framed by another site (`frame-ancestors 'none'`).
+
+### Checked
+
+Locally in headless Chrome, driven over the **DevTools protocol** (a script fills in the key and question, clicks Ask, captures the page): the answer and sources render; links are readable in dark mode; no horizontal scroll at 500 px. A new question for the demo ("How many rat complaints were made in ward 1 in 2026, and what must a landlord do about rodents?"): 1,099 complaints (checked in the database) and section 5-12-110, 4.2 s, 4 model calls. Saved as `docs/demo.gif` and `docs/screenshot.png`.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/static/index.html` | New: the page |
+| `app/main.py` | `GET /` with the security headers |
+| `tests/test_api.py` | The page is served, with the policy, and without `innerHTML` |
+| `docs/demo.gif`, `docs/screenshot.png` | The demo |
+
+### Check it yourself
+
+```bash
+.venv/bin/uvicorn app.main:app --reload    # then open http://localhost:8000 and paste SERVICE_API_KEY from .env
+```
+
+### Concepts
+
+- **XSS (cross-site scripting):** text from elsewhere inserted as HTML can run as code in the visitor's browser. Inserting it as text makes that impossible.
+- **Content Security Policy:** a response header listing what a page may load and contact; the browser enforces it, so even a bug can't pull in a script from another site.
+- **localStorage:** a small per-site store in the browser; it stays on that device and is never sent to the server by itself.
+
+---
+
 ## Day 13 (7): CI is green; Day 13 done
 
 **Goal:** confirm the CI eval works end to end, and record Day 13 as done.

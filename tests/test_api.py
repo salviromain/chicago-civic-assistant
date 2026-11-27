@@ -190,3 +190,13 @@ def test_questions_are_logged_only_when_switched_on(pipeline, settings, log_line
     settings(log_questions=True)
     ask("Is the question kept?")
     assert [l for l in log_lines if l["message"] == "query"][0]["question"] == "Is the question kept?"
+
+
+def test_the_page_is_served_with_a_strict_content_policy():
+    r = client.get("/")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert "<title>Chicago Civic Data Assistant</title>" in r.text
+    assert "default-src 'none'" in r.headers["Content-Security-Policy"]
+    assert "connect-src 'self'" in r.headers["Content-Security-Policy"]
+    # Nothing from the server is inserted as HTML: answers and sources go in as text
+    assert "innerHTML" not in r.text
