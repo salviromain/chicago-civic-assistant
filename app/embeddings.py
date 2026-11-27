@@ -80,8 +80,10 @@ class MinuteBudget:
 
 def embed_texts(texts: list[str], model: str, dims: int, task: str,
                 api_key: str | None, cache_dir: Path = CACHE_DIR,
-                client=None, budget: MinuteBudget | None = None) -> tuple[list[list[float]], int]:
-    """Embed texts, reading and writing a per-text cache. Returns (vectors, API calls)."""
+                client=None, budget: MinuteBudget | None = None,
+                progress: bool = True) -> tuple[list[list[float]], int]:
+    """Embed texts, reading and writing a per-text cache. Returns (vectors, API calls).
+    progress prints a line per batch (ingest); the API turns it off (one JSON line per request)."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     vectors: list[list[float] | None] = [None] * len(texts)
     missing = []
@@ -112,7 +114,8 @@ def embed_texts(texts: list[str], model: str, dims: int, task: str,
                 tmp.write_text(json.dumps(vec))
                 tmp.replace(f)  # never leave a half-written cache file
             done += len(idx)
-            print(f"  embedded {done}/{len(missing)}", flush=True)
+            if progress:
+                print(f"  embedded {done}/{len(missing)}", flush=True)
     return vectors, calls  # type: ignore[return-value]
 
 
@@ -154,5 +157,5 @@ def embed_query(text: str) -> list[float]:
     from app.config import get_settings
     s = get_settings()
     vectors, _ = embed_texts([text], s.embedding_model, s.embedding_dims, "RETRIEVAL_QUERY",
-                             os.getenv("GEMINI_API_KEY") or s.gemini_api_key)
+                             os.getenv("GEMINI_API_KEY") or s.gemini_api_key, progress=False)
     return vectors[0]

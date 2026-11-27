@@ -1,0 +1,12 @@
+# Development: the API, plus loading data, evals and tests.
+# The optional reranker (PyTorch, ~1 GB) is separate: requirements-reranker.txt
+-r requirements.txt
+python-dotenv==1.2.4   # scripts and evals read .env
+requests==2.34.2       # ingest: Chicago Data Portal downloads
+pandas==3.1.1          # ingest
+pyarrow==26.0.1        # ingest
+pymupdf==2.1           # ingest: PDF text
+
+# tests
+pytest==9.2.0
+httpx==0.28.1

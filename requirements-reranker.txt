@@ -1,0 +1,4 @@
+# Optional: the cross-encoder reranker (use_reranker, off by default since Day 4; Day 10 confirmed).
+# Brings PyTorch (~1 GB). Only needed to rerun the reranker experiments.
+-r requirements-dev.txt
+sentence-transformers==6.3.0

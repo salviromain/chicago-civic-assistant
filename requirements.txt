@@ -1,19 +1,12 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.7
-pydantic-settings>=2.3
-python-dotenv>=1.0
-sqlalchemy>=2.0
-psycopg[binary]>=3.2
-pgvector>=0.3
-requests>=2.32
-pandas>=2.2
-pyarrow>=16.0
-google-genai>=1.0
-sqlglot>=25          # parses LLM-written SQL for the guardrails
-pymupdf>=1.24
-sentence-transformers>=3.0  # reranker (brings PyTorch)
-
-# dev / test
-pytest>=8.0
-httpx>=0.27
+# What the API needs to run: this is all the Docker image installs.
+# Pinned to the versions tested, so a rebuild next month gets the same code.
+# Development (ingest, evals, tests): pip install -r requirements-dev.txt
+fastapi==0.163.2
+uvicorn[standard]==0.54.0
+pydantic==2.14.3
+pydantic-settings==2.16.3
+psycopg[binary]==3.3.9
+pgvector==0.5.1
+numpy==2.5.5           # the query vector sent to pgvector
+google-genai==3.5.0
+sqlglot==30.35.0       # parses LLM-written SQL for the guardrails

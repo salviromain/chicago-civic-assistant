@@ -25,7 +25,7 @@ Prerequisites: Python 3.12+ and Docker (macOS: `brew install --cask docker`, the
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate   # once per terminal: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt           # requirements.txt = what the API image installs
 cp .env.example .env                      # add your keys
 docker compose up -d db                   # Postgres + pgvector
 python scripts/check_db.py                # Postgres up, pgvector on, read-only role works
@@ -41,7 +41,14 @@ curl -s -X POST localhost:8000/query -H "X-API-Key: $SERVICE_API_KEY" -H "Conten
   -d '{"question": "How many heat violations were recorded last winter, and what heat must landlords provide?"}'
 ```
 
-The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, docs or both), the `citations` (the SQL that ran, or the code section / budget page with a link), `refused`, `latency_ms`, token `usage` and `cost_usd`. Errors: `401` bad key, `422` bad input, `502` the language model failed, `503` database down or daily quota used up, `504` no answer within 30 s.
+The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, docs or both), the `citations` (the SQL that ran, or the code section / budget page with a link), `refused`, `latency_ms`, token `usage` and `cost_usd`. Errors: `401` bad key, `422` bad input, `429` too many questions (per client: 5 a minute, 50 a day; the service: 500 a day; `Retry-After` says when to try again), `502` the language model failed, `503` database down or daily quota used up, `504` no answer within 30 s. Each response has an `X-Request-ID` header that matches its line in the server log.
+
+**With Docker** (the image the deployment uses; reads `.env`):
+
+```bash
+docker compose up -d db
+docker compose up --build api              # http://localhost:8000/docs
+```
 
 ## Evaluation
 

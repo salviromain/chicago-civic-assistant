@@ -4,6 +4,58 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 12 (2/3): a production Docker image: 438 MB, no secrets, no root
+
+**Goal:** an image Cloud Run can run (Day 13), built only from what the API needs.
+
+### What was wrong with the old Dockerfile
+
+- It copied only `app/`, but the SQL agent's prompt reads `docs/TABLES.md` at runtime: the first table question would have crashed.
+- It installed every package in `requirements.txt`, including PyTorch for the reranker (off since Day 4) and the ingest tools: an image over 2 GB.
+- It ran as **root** (the all-powerful user), and nothing stopped `.env` from being copied in.
+
+### The new setup
+
+| File | What it holds |
+| --- | --- |
+| `requirements.txt` | Only the API's packages, **pinned** to the tested versions (`fastapi==0.163.2`, not `>=0.115`), so a rebuild next month installs the same code. SQLAlchemy is gone: nothing imported it. |
+| `requirements-dev.txt` | + ingest, evals and tests (what CI and your venv install) |
+| `requirements-reranker.txt` | + `sentence-transformers` (PyTorch), only to rerun the reranker experiments |
+| `.dockerignore` | An **allow-list**: everything is excluded except `app/`, `docs/TABLES.md` and `requirements.txt`. `.env`, `data/` and `.venv` can't reach the image. |
+| `Dockerfile` | Dependencies installed first (that **layer** is reused until `requirements.txt` changes, so code changes rebuild in seconds); then the code and `TABLES.md`; runs as user `civic` (uid 10001), which may write only its reply caches in `data/`; `exec uvicorn` so it receives Cloud Run's stop signal; no access log (the app writes its own JSON line). |
+
+Also: the query embedding no longer prints `embedded 1/1` (a progress line meant for ingest), so the server's output is only JSON lines.
+
+### Checked on the real image
+
+Against the local database (`docker run` on the compose network, and `docker compose up api`): `/health` says the database is ok; a document question answered in 2.6 s, a table question (`docs/TABLES.md` + `civic_reader`) in 4.2 s; `id` in the container says `uid=10001(civic)`; `/srv` holds only `app`, `data`, `docs/TABLES.md` and `requirements.txt`. Tests pass in a fresh venv with only `requirements-dev.txt`: no PyTorch needed.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `Dockerfile`, `.dockerignore` | As above |
+| `requirements*.txt` | Split in three, pinned |
+| `app/embeddings.py` | `progress=False` for single questions |
+| `.github/workflows/ci.yml`, `.vscode/tasks.json`, `README.md` | Install `requirements-dev.txt`; README: Docker run, 429, `X-Request-ID` |
+
+### Check it yourself
+
+```bash
+docker build -t civic-api . && docker image ls civic-api        # ~438 MB
+docker run --rm civic-api sh -c 'id; ls -a /srv'                 # civic user; no .env, no .venv
+docker compose up -d db && docker compose up --build api         # http://localhost:8000/docs
+```
+
+### Concepts
+
+- **Image layers:** each Dockerfile step is a cached layer; put what changes least (dependencies) first, so rebuilding after a code change reuses it.
+- **Pinning:** exact versions make builds reproducible; `>=` gets whatever is newest that day.
+- **Least privilege:** the process runs as a user that can do only what it needs, so a bug or attack in the app can't change the system files.
+- **Allow-list vs. deny-list:** listing what may go in is safer than listing what must stay out; a new secret file is excluded without anyone remembering to add it.
+
+---
+
 ## Day 12 (1/3): rate limits, and one JSON log line per request with latency, tokens and cost
 
 **Goal:** make `/query` safe to open to strangers: limit how many questions a client (and the whole service) can ask, and record what each request cost in time and money.

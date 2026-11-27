@@ -1,0 +1,7 @@
+# Allow-list: only what the image needs reaches the build. .env (secrets),
+# data/ (downloads, caches) and .venv can't be copied in by mistake.
+*
+!app/
+!docs/TABLES.md
+!requirements.txt
+**/__pycache__
