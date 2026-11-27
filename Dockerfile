@@ -1,7 +1,7 @@
 # The API image (Day 12). Build and run locally:
 #   docker build -t civic-api .
 #   docker compose up -d db && docker compose up api
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
