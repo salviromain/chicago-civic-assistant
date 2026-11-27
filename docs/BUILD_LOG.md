@@ -4,6 +4,36 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 14 (3/3): the page is live; the plan is done
+
+**Goal:** put the page on the live service, check it there, and close the plan.
+
+### Checked on the live service
+
+`sh scripts/deploy.sh` (revision `civic-api-00002-wdn`). `GET /` returns the page with the security headers (`Content-Security-Policy`, `X-Content-Type-Options: nosniff`). A question asked through the page in headless Chrome, dark mode: "How much notice must my landlord give before entering my apartment?" → two days' notice, except emergencies, from section 5-12-050, 14.5 s (free tier, first request after the service had scaled to zero).
+
+### Where it stands
+
+All 14 days of the plan are done: three tables and four document sets loaded; Text-to-SQL and document search behind a router; cited answers that refuse when unsupported; an 87-question eval set plus 15 held-out questions; experiments; failures fixed (answer checks 84.4% → 100%, held-out 15/15); rate limits, logs and a Docker image; Neon, Cloud Run, Secret Manager; CI with a live eval gate; a web page, a demo and a README.
+
+Possible next steps: a daily question cap stored in the database (so it survives restarts), then the paid key for the demo (2–4 s instead of 15–35 s).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Day 14 done; next steps |
+
+### Check it yourself
+
+Open https://civic-api-408605137306.us-east5.run.app, click "API key", paste the key (`gcloud secrets versions access latest --secret=service-api-key | pbcopy`), ask a question.
+
+### Concepts
+
+- **Cold start, seen by a user:** the first visitor after an idle spell waits for the container to start and Neon to wake, a few seconds on top of the answer time.
+
+---
+
 ## Day 14 (2/3): the README, for someone seeing the project for the first time
 
 **Goal:** a README that a recruiter or engineer can read in two minutes: what problem it solves, a demo, the results, how it works and why the answers can be trusted, then the details.
