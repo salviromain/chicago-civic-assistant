@@ -4,6 +4,58 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (1/4): the database on Neon, with a read-only role made by a script
+
+**Goal:** move the data to a hosted Postgres that Cloud Run can reach, without any password passing through a person.
+
+### Neon
+
+**Neon** is hosted Postgres with a free plan (1 GB storage, 100 compute-hours a month). Its compute **scales to zero**: after 5 idle minutes it pauses, and the first query afterwards wakes it (well under a second). The project is in AWS `us-east-2` (Ohio), Postgres 16 like the local database, with pgvector.
+
+### `scripts/setup_neon.py`
+
+1. **Copy:** `pg_dump` of the local `civic` database piped straight into `pg_restore` on Neon. Both tools run inside the local db container, so their version matches the server's; the Neon URL goes in through an environment variable, not the command line (the process list would show it). 50 seconds for 369 MB.
+2. **Read-only role:** `civic_reader` on Neon with a **random 256-bit password**: SELECT on the tables, a 15 s statement timeout, as `db/init.sql` does locally.
+3. **Secret:** the reader's connection URL goes straight into **Google Secret Manager** (`readonly-database-url`), where Cloud Run and CI read it. The password is never printed or written to disk; nobody needs to know it.
+4. **Check:** row counts, local vs. Neon, connected as `civic_reader`, and a `CREATE TABLE` that must be refused.
+
+```
+table                       local       neon
+service_requests_311    1,819,028  1,819,028
+building_violations        90,738     90,738
+building_permits           60,420     60,420
+doc_chunks                    351        351
+connected as civic_reader: writes are refused (read-only)
+Neon database size: 368 MB (free plan: 1 GB)
+```
+
+The owner's connection string is in `.env` as `NEON_DATABASE_URL` (only this script uses it). `DATABASE_URL` still points at the local database, so ingest scripts can't write to Neon by accident.
+
+### The eval set against Neon
+
+All 87 questions with the LLM replies from the cache (so ~free) but every SQL query and search live on Neon (`neon-check`): same results as locally (answer checks 100%, SQL execution 97.7%). Table questions spent a median 0.4 s in the database; document search 1.4 s, because from this Mac each new connection to Ohio takes 190 ms and each round trip 52 ms, and a search opens several. Cloud Run runs next to Neon (Day 13, 2/4).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `scripts/setup_neon.py` | New: copy, role, secret, check |
+| `evals/results/neon-check-summary.json` | The eval set on Neon |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m scripts.setup_neon --check
+```
+
+### Concepts
+
+- **pg_dump / pg_restore:** export a database to one file (here a stream) and load it elsewhere, schema, data and indexes together.
+- **Secret Manager:** a store for secrets with access control and versions; services read a secret at startup, so it's never in code, images or chat.
+- **Scale to zero:** a service that stops when idle and costs nothing then, at the price of a short wake-up delay.
+
+---
+
 ## Day 12 (3/3): CLAUDE.md: Day 12 done, Day 13 next
 
 **Goal:** record Day 12's state and what Day 13's deployment depends on.
