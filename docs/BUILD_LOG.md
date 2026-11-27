@@ -4,6 +4,33 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (7): CI is green; Day 13 done
+
+**Goal:** confirm the CI eval works end to end, and record Day 13 as done.
+
+### The run
+
+`gh workflow run CI` on `main` (run 45962414423): tests passed; the eval job, on the paid key against Neon, answered 10 of 10 correctly (SQL execution 6/6, answer checks 8/8, refusals 2/2) in 0.6 minutes, no errors, no retry needed, p50 2.7 s, p95 8.0 s, $0.0039 a question (~$0.04 the run). No more Node.js 20 warnings.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `CLAUDE.md` | Day 13 done: CI on the paid key, first green run, `gh` logged in; the demo stays on the free key |
+
+### Check it yourself
+
+```bash
+gh run list --workflow CI --limit 3
+gh run view 45962414423 --log | grep "Eval subset" | tail -20
+```
+
+### Concepts
+
+- **`workflow_dispatch`:** a workflow that can also be started by hand (button or `gh workflow run`), handy for checking CI changes without opening a pull request.
+
+---
+
 ## Day 13 (6): CI's eval uses the paid key
 
 **Goal:** a CI eval that reflects the code, not the free tier's load.
