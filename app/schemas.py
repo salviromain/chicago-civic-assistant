@@ -20,6 +20,7 @@ class Citation(BaseModel):
     source: str = Field(..., description="Table name or document section, e.g. 'Municipal Code 14X-8-802.2.2'")
     snippet: str | None = Field(None, description="The supporting text or the SQL that was run")
     url: str | None = None
+    highlights: list[str] = Field([], description="Words in the snippet that match the answer, to highlight")
 
 
 class Usage(BaseModel):

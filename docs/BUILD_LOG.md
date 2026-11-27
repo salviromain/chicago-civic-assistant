@@ -4,6 +4,81 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Page: excerpts that show the evidence, a live timer and Cancel, examples that ask
+
+**Goal:** five fixes from a look at the page (`docs/screenshot.png`). Most important: the excerpt under a document citation should show the text that supports the answer.
+
+### The problem with the old excerpt
+
+A citation's excerpt was the **first 300 characters** of the chunk. In the screenshot, the answer quotes 5-12-110's rodent rule, but the excerpt shows the section's opening ("In addition to any remedies provided under federal law…") and stops at "circumst…". A reader checking the source can't find the claim in it.
+
+### How the passage is picked (`app/excerpt.py`)
+
+After Gemini writes the answer, code knows which sentence cites which source (`[D2]`). For each cited chunk:
+
+1. The chunk is cut into **pieces**: sentences of prose (PDF line wraps joined back into one line) and rows of tables (the budget pages keep their `|` rows, one per line). Times like "8:30 a.m." and list numbers like "1." don't end a sentence. One long rule is kept whole up to 800 characters (the heat rule is a single 560-character sentence).
+2. Every **window** of whole pieces that fits in 400 characters and starts at a piece sharing a word with the claim or the question gets a score: the distinct words it shares, compared by a rough **stem** ("rodents" = "rodent", "heating" = "heat"). Each word counts once, so repeating one word doesn't win. Numbers count more (`914,383,396` pins the budget row); years count less (every budget page says 2027). Common words ("shall", "section", "required") don't count.
+3. The best window wins (a tie keeps the earlier one). The words that matched come back in a new `highlights` field of the citation, and the page marks them.
+
+On the real chunks:
+
+| Claim | Old excerpt | New excerpt |
+| --- | --- | --- |
+| Landlords must keep the building protected against rodents (5-12-110) | "In addition to any remedies provided under federal law…" | "…Failure to maintain the foundation, exterior walls or exterior roof … protected against **rodents**;…" |
+| Fire Department, 2027: $914,383,396 (budget p. 120) | "PUBLIC SAFETY / Public Safety / FUNDING COMPARISON…" (cut before the row) | The table header through "Chicago **Fire** **Department** \| 907,646,972 \| **914,383,396**" |
+| Landlord's notice before entering (5-12-050) | The section's first lines | "…the **landlord** shall **give** the tenant **notice** of the landlord's intent to **enter** of no less than two **days**." |
+
+Two dead ends on the way, kept for the record: preferring the *later* window on a tie fixed the rodent excerpt but moved the notice excerpt to a different sentence that scored the same ("notice of such entry within two days *after* such entry"). Starting windows only at a matching piece fixed both.
+
+Nothing else depends on the excerpt: the evals score the answer, the route, the SQL and the chunk ids, not the snippet, so no eval rerun was needed.
+
+### The page (`app/static/index.html`)
+
+| Before | After |
+| --- | --- |
+| A fixed "Looking it up…" for up to 30 s | A ticking clock ("Looking it up… 12 s") and a **Cancel** button (`AbortController` stops waiting; the server still finishes, so it still counts toward the limits) |
+| Six long example questions; a click only filled the box | Short labels in four groups (City data, City code, Budget, Both); a click asks right away (with no key saved: the key box opens instead) |
+| Enter added a new line | Enter asks, Shift+Enter adds a line (not while an **input method** is composing, e.g. Japanese or Chinese typing) |
+| `[1]` raised with `vertical-align: super`, which pushed its line down (uneven line spacing) | Raised with `position: relative`, `line-height: 0`: lines stay evenly spaced |
+| Excerpts folded, in monospace, PDF line breaks kept | "The passage behind the answer" shown open, in the normal font, with the matching words marked (`<mark>`, built as text nodes: still no `innerHTML`); the SQL stays folded |
+| Ask button below the API-key box | Ask directly under the question; the key box at the bottom (open on a first visit) |
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/excerpt.py` (new) | Pick the passage that supports a claim; the words to highlight |
+| `app/answer.py` | `doc_citation(chunk, focus)`, `claims_by_id(answer)`: cited excerpts are picked after the answer is written; 400 characters instead of 300 |
+| `app/schemas.py` | `Citation.highlights` (a new field; existing API clients ignore it) |
+| `app/static/index.html` | The five page changes above |
+| `tests/test_excerpt.py` (new), `tests/test_answer.py` | 8 tests: stems, the passage behind the claim, no match, repetition, budget rows, line wraps and times, starting at the match, the answer flow |
+| `README.md` | Test count 170 → 194 |
+
+### Step by step
+
+1. Read real chunks (5-12-110, the budget's Public Safety page, 14X-8-802.2.2, 5-12-050) to see how text is stored: PDF line wraps in the code, `|` tables in the budget.
+2. Wrote the passage picker; checked it on those chunks; fixed long sentences (kept whole), "p.m." and "1." (not sentence ends), and the tie rule (twice, above).
+3. Wired it into the answer step; the page renders the highlights as text nodes.
+4. Ran a local server against the real database with a throwaway API key, and drove the page in **headless Chrome** (light and dark): example without a key → key box; timer and Cancel on an uncached question; Shift+Enter adds a line; Enter asks; the rodent passage marked. The dark run first hit the server's 5-a-minute limit (the limiter works); rerun with the limit raised for the test.
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_excerpt.py
+uvicorn app.main:app --reload   # http://localhost:8000: ask "How many rat complaints were made in ward 1 in 2026, and what must a landlord do about rodents?"
+```
+
+Source 2's excerpt should start at "Failure to maintain the foundation…", with "rodents" marked.
+
+### Concepts
+
+- **Stemming:** cutting words to a common root so "rodent" and "rodents" match. Search engines use careful stemmers (Postgres's `english` config, used for BM25 on Day 4); a rough one is enough to pick a passage.
+- **Sliding window:** score every stretch of consecutive pieces that fits a size, keep the best one.
+- **Evidence highlighting:** showing the exact words behind a claim makes a citation checkable in seconds, which is the point of citing.
+- **`AbortController`:** the browser's way to cancel a `fetch`; the server isn't told, so cancelling saves the visitor's time, not the server's work.
+
+---
+
 ## Dependabot's first pull requests: three merged after a real test, one closed
 
 **Goal:** handle the four pull requests Dependabot opened within a minute of being switched on.

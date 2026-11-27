@@ -132,3 +132,16 @@ def test_numbers_in_the_table_source_are_tidy():
     assert "42,462,228.92 | 0.367 | 5,443 | 6.986" in text
     assert ans._number(8.448800409540189) == "8.449"  # not 8.45, which the answer would round to 8.5
     assert ans._number(3.0) == "3" and ans._number(2989283995) == "2,989,283,995"
+
+
+def test_cited_excerpt_shows_the_passage_behind_the_claim():
+    long = dict(HEAT, id="5-12-110#1", section="5-12-110", title="Tenant remedies",
+                text="5-12-110 Tenant remedies\n" + "\n\n".join(
+                    f"Failure to maintain item {n} as required;" for n in range(20))
+                + "\n\nFailure to exterminate insects, rodents or other pests;")
+    d = RouteDecision(reasoning="r", route=Route.docs, docs_question="q")
+    trace, _, _ = go(d, AnswerDraft(answer="Landlords must exterminate rodents [D1].", refused=False),
+                     chunks=[long])
+    c = trace.response.citations[0]
+    assert "exterminate insects, rodents" in c.snippet and "rodents" in c.highlights
+    assert not c.snippet.startswith("Tenant remedies")   # the heading line isn't part of the excerpt

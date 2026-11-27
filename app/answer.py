@@ -34,7 +34,7 @@ from app.sql_agent import SqlResult
 
 PREVIEW_ROWS = 50     # rows of a SQL result shown to the answer model
 CELL_CHARS = 200      # long text cells (inspector comments) are cut to this
-SNIPPET_CHARS = 300   # chunk text kept in a citation
+SNIPPET_CHARS = 400   # chunk text kept in a citation (the passage that supports the claim)
 
 DATASETS = {  # table -> (name, portal URL)
     "service_requests_311": ("311 Service Requests", "https://data.cityofchicago.org/d/v6vf-nfxy"),
@@ -172,10 +172,23 @@ def sql_citation(r: SqlResult) -> Citation:
     return Citation(source=f"Chicago Data Portal: {names}", snippet=r.sql, url=url)
 
 
-def doc_citation(c: dict) -> Citation:
-    body = c["text"].split("\n", 1)[-1].strip()
-    snippet = body if len(body) <= SNIPPET_CHARS else body[:SNIPPET_CHARS] + "…"
-    return Citation(source=doc_label(c), snippet=snippet, url=c.get("url"))
+def doc_citation(c: dict, focus: str = "") -> Citation:
+    """The chunk's passage that best matches `focus` (the claim citing it and the
+    question), with the matching words to highlight. No focus: the chunk's start."""
+    from app.excerpt import best_passage
+    body = c["text"].split("\n", 1)[-1].strip()   # the first line is the heading
+    excerpt = best_passage(body, focus, SNIPPET_CHARS)
+    return Citation(source=doc_label(c), snippet=excerpt.text, url=c.get("url"),
+                    highlights=excerpt.highlights)
+
+
+def claims_by_id(text: str) -> dict[str, str]:
+    """Source id -> the sentences of the answer that cite it."""
+    claims: dict[str, str] = {}
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        for sid in cited_ids(sentence):
+            claims[sid] = f"{claims.get(sid, '')} {_ID.sub('', sentence)}".strip()
+    return claims
 
 
 # A citation: [T1], [D3], or several ids in one bracket: [D1, D4], [T1; D2]
@@ -271,6 +284,11 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
     trace.draft = draft = reply.parsed
     lap("answer", t)
 
+    # Each cited excerpt shows the passage behind the claim, not just the chunk's start
+    claims = claims_by_id(draft.answer)
+    for i, c in enumerate(trace.chunks, 1):
+        if f"D{i}" in claims and f"D{i}" in available:
+            available[f"D{i}"] = doc_citation(c, f"{claims[f'D{i}']} {question}")
     text, citations = link_citations(draft.answer, available)
     ids = {"T1": "T1", **{f"D{i}": c["id"] for i, c in enumerate(trace.chunks, 1)}}
     trace.cited = [ids[sid] for sid in cited_ids(draft.answer) if sid in available]

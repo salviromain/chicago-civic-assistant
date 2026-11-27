@@ -74,7 +74,7 @@ python -m ingest.load_docs                   # PDFs downloaded by hand to data/d
 uvicorn app.main:app --reload                # http://localhost:8000 (page) and /docs
 ```
 
-With Docker, as deployed: `docker compose up --build api`. Tests: `pytest -q` (170; no database or API key needed: the models and database are faked). Evals: `python -m evals.run_evals --label mine` (~$0.30 on a paid key; replies are cached, so re-runs are free).
+With Docker, as deployed: `docker compose up --build api`. Tests: `pytest -q` (194; no database or API key needed: the models and database are faked). Evals: `python -m evals.run_evals --label mine` (~$0.30 on a paid key; replies are cached, so re-runs are free).
 
 ## Deployment
 
@@ -85,7 +85,7 @@ With Docker, as deployed: `docker compose up --build api`. Tests: `pytest -q` (1
 | Secrets | Google Secret Manager (Gemini key, the service's API key, the read-only database URL), read at startup, never in the image |
 | Gemini | The public demo uses a free-tier key from a project with billing off, so visitors can't create costs; development and CI use a paid key |
 | Limits and logs | Per client 5 questions a minute and 50 a day, 100 a day in total; one JSON log line per question (status, latency, tokens, cost) |
-| CI | GitHub Actions: 170 tests on every push; on pull requests, a live 10-question eval against Neon that fails below 80% (~$0.04 a run) |
+| CI | GitHub Actions: 194 tests on every push; on pull requests, a live 10-question eval against Neon that fails below 80% (~$0.04 a run) |
 
 ## Evaluation
 

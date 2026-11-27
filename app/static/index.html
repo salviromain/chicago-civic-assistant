@@ -9,13 +9,13 @@
   :root {
     --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #5f5f5a; --line: #e2e1dc;
     --accent: #1f5fae; --accent-text: #ffffff; --chip: #eef2f8; --warn-bg: #fff6e0; --warn: #7a5300;
-    --err-bg: #fdecec; --err: #9b1c1c; --code-bg: #f1f0ec; --focus: #1f5fae;
+    --err-bg: #fdecec; --err: #9b1c1c; --code-bg: #f1f0ec; --focus: #1f5fae; --mark: #fde68a;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #141413; --panel: #1d1d1b; --text: #ecebe6; --muted: #a5a49d; --line: #34332f;
       --accent: #7fb0f0; --accent-text: #0d1726; --chip: #23303f; --warn-bg: #3a2f12; --warn: #f2d38a;
-      --err-bg: #3b1a1a; --err: #f3b1b1; --code-bg: #262522; --focus: #7fb0f0;
+      --err-bg: #3b1a1a; --err: #f3b1b1; --code-bg: #262522; --focus: #7fb0f0; --mark: #5c4a12;
     }
   }
   * { box-sizing: border-box; }
@@ -36,17 +36,26 @@
                padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
   button.ask:disabled { opacity: .6; cursor: wait; }
   .hint { color: var(--muted); font-size: .9rem; }
-  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+  button.cancel { background: none; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+                  padding: 9px 14px; font: inherit; cursor: pointer; }
+  .examples { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+  .examples-title { color: var(--muted); font-size: .9rem; margin: 0 0 8px; }
+  .group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; margin: 0 0 8px; }
+  .group-name { color: var(--muted); font-size: .8rem; font-weight: 600; text-transform: uppercase;
+                letter-spacing: .04em; width: 92px; flex: none; }
   .examples button { background: var(--chip); color: var(--text); border: 1px solid var(--line);
-                     border-radius: 999px; padding: 6px 12px; font: inherit; font-size: .9rem; cursor: pointer;
+                     border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .9rem; cursor: pointer;
                      text-align: left; }
+  .examples button:hover { border-color: var(--accent); }
+  @media (max-width: 520px) { .group-name { width: 100%; } }
   details.key { margin-top: 14px; }
   details.key summary { cursor: pointer; color: var(--muted); font-size: .95rem; }
   details.key .row { margin-top: 8px; }
   #result { margin-top: 20px; }
   .answer { font-size: 1.05rem; white-space: pre-wrap; margin: 0; }
-  .answer a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: .85em;
-              vertical-align: super; }
+  /* Raised without vertical-align: super, which pushes its line down and spaces lines unevenly */
+  .answer a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: .75em;
+              position: relative; top: -.45em; line-height: 0; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: .85rem; margin-top: 12px; }
   .badge { border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
   .refused { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
@@ -58,6 +67,10 @@
   .src { font-weight: 600; overflow-wrap: anywhere; }
   .src a { color: var(--accent); }
   details.snip summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+  blockquote { margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid var(--line);
+               background: var(--code-bg); border-radius: 0 8px 8px 0; white-space: pre-line;
+               font-size: .92rem; }
+  mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
   pre { background: var(--code-bg); border-radius: 8px; padding: 10px 12px; margin: 6px 0 0;
         white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }
   footer { color: var(--muted); font-size: .85rem; margin-top: 32px; }
@@ -78,16 +91,27 @@
 
   <form class="panel" id="form">
     <label for="q">Your question</label>
-    <textarea id="q" maxlength="1000" required
+    <textarea id="q" maxlength="1000" required aria-describedby="enter-hint"
       placeholder="How many pothole complaints were made in ward 25 in 2026?"></textarea>
-    <ul class="examples" aria-label="Example questions">
-      <li><button type="button">What minimum temperature must my landlord keep my apartment at during the day?</button></li>
-      <li><button type="button">How many pothole complaints were made in ward 25 in 2026?</button></li>
-      <li><button type="button">Which address had the most heat violations recorded since 2025?</button></li>
-      <li><button type="button">How much notice must my landlord give before entering my apartment?</button></li>
-      <li><button type="button">What is the proposed 2027 budget for the Chicago Fire Department?</button></li>
-      <li><button type="button">How many heat violations were recorded in January 2026, and what heat must landlords provide at night?</button></li>
-    </ul>
+    <div class="row">
+      <button class="ask" id="ask" type="submit">Ask</button>
+      <button class="cancel" id="cancel" type="button" hidden>Cancel</button>
+      <span class="hint" id="status" role="status" aria-live="polite"></span>
+      <span class="hint" id="enter-hint">Enter to ask, Shift+Enter for a new line</span>
+    </div>
+    <div class="examples">
+      <p class="examples-title">Or try one (click to ask):</p>
+      <div class="group"><span class="group-name">City data</span>
+        <button type="button" data-q="How many pothole complaints were made in ward 25 in 2026?">Pothole complaints in ward 25, 2026</button>
+        <button type="button" data-q="Which address had the most heat violations recorded since 2025?">Address with the most heat violations</button></div>
+      <div class="group"><span class="group-name">City code</span>
+        <button type="button" data-q="What minimum temperature must my landlord keep my apartment at during the day?">Minimum heat during the day</button>
+        <button type="button" data-q="How much notice must my landlord give before entering my apartment?">Notice before a landlord enters</button></div>
+      <div class="group"><span class="group-name">Budget</span>
+        <button type="button" data-q="What is the proposed 2027 budget for the Chicago Fire Department?">Fire Department, 2027</button></div>
+      <div class="group"><span class="group-name">Both</span>
+        <button type="button" data-q="How many heat violations were recorded in January 2026, and what heat must landlords provide at night?">Heat violations in January 2026 + the night-time heat rule</button></div>
+    </div>
     <details class="key" id="keybox">
       <summary>API key</summary>
       <div class="row">
@@ -95,10 +119,6 @@
       </div>
       <p class="hint">Kept in this browser only. Ask the owner for a key.</p>
     </details>
-    <div class="row">
-      <button class="ask" id="ask" type="submit">Ask</button>
-      <span class="hint" id="status" role="status" aria-live="polite"></span>
-    </div>
   </form>
 
   <section id="result" aria-live="polite"></section>
@@ -114,7 +134,9 @@
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const form = $("form"), q = $("q"), key = $("key"), ask = $("ask"), status = $("status"), result = $("result");
+  const form = $("form"), q = $("q"), key = $("key"), ask = $("ask"), cancel = $("cancel"),
+        status = $("status"), result = $("result"), enterHint = $("enter-hint");
+  let running = null;  // { controller, timer } while a question is out
   const store = {
     get() { try { return localStorage.getItem("civic-api-key") || ""; } catch (e) { return ""; } },
     set(v) { try { localStorage.setItem("civic-api-key", v); } catch (e) { /* private mode */ } },
@@ -122,8 +144,28 @@
   key.value = store.get();
   if (!key.value) $("keybox").open = true;
 
+  // An example asks right away (no key yet: open the key box first)
   document.querySelectorAll(".examples button").forEach((b) =>
-    b.addEventListener("click", () => { q.value = b.textContent; q.focus(); }));
+    b.addEventListener("click", () => {
+      q.value = b.dataset.q;
+      if (!key.value.trim()) {
+        $("keybox").open = true;
+        key.focus();
+        status.textContent = "Add an API key, then press Ask.";
+        return;
+      }
+      form.requestSubmit();
+    }));
+
+  // Enter asks; Shift+Enter is a new line (not while an input method is composing)
+  q.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
+      ev.preventDefault();
+      if (!ask.disabled) form.requestSubmit();
+    }
+  });
+
+  cancel.addEventListener("click", () => running && running.controller.abort());
 
   function el(tag, attrs, ...children) {
     const n = document.createElement(tag);
@@ -144,6 +186,22 @@
     }
     p.append(text.slice(last));
     return p;
+  }
+
+  // Excerpt text with the words that match the answer in <mark> (text only, no HTML)
+  function highlighted(tag, text, words) {
+    const node = el(tag, {});
+    const usable = (words || []).filter((w) => typeof w === "string" && w.length > 1);
+    if (!usable.length) { node.append(text); return node; }
+    const escaped = usable.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const re = new RegExp("(?<![\\w])(" + escaped.join("|") + ")(?![\\w])", "gi");
+    let last = 0;
+    for (const m of text.matchAll(re)) {
+      node.append(text.slice(last, m.index), el("mark", {}, m[0]));
+      last = m.index + m[0].length;
+    }
+    node.append(text.slice(last));
+    return node;
   }
 
   function showAnswer(d, requestId, seconds) {
@@ -167,10 +225,13 @@
         const name = safe ? el("a", { href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.source) : c.source;
         const li = el("li", { id: "src-" + (i + 1) }, el("div", { class: "src" }, name));
         if (c.snippet) {
+          // SQL stays folded; a document excerpt is the evidence, so it's shown open
           const isSql = /^\s*(SELECT|WITH)\b/i.test(c.snippet);
-          li.append(el("details", { class: "snip" },
-            el("summary", {}, isSql ? "The SQL query that ran" : "Excerpt from the source"),
-            el("pre", {}, c.snippet)));
+          const snip = el("details", { class: "snip" },
+            el("summary", {}, isSql ? "The SQL query that ran" : "The passage behind the answer"),
+            isSql ? el("pre", {}, c.snippet) : highlighted("blockquote", c.snippet, c.highlights));
+          snip.open = !isSql;
+          li.append(snip);
         }
         ol.append(li);
       });
@@ -201,22 +262,35 @@
     if (!question) return;
     store.set(key.value.trim());
     ask.disabled = true;
-    status.replaceChildren(el("span", { class: "spinner", "aria-hidden": "true" }), "Looking it up… (usually a few seconds; the free model tier can take up to 30)");
+    cancel.hidden = false;
+    enterHint.hidden = true;
     const t0 = performance.now();
+    // A ticking clock, so a slow answer (the free model tier can take 30 s) visibly isn't stuck
+    const counter = el("span", {}, "0 s");
+    status.replaceChildren(el("span", { class: "spinner", "aria-hidden": "true" }), "Looking it up… ", counter);
+    running = { controller: new AbortController(),
+                timer: setInterval(() => { counter.textContent = Math.round((performance.now() - t0) / 1000) + " s"; }, 1000) };
     try {
       const r = await fetch("/query", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": key.value.trim() },
         body: JSON.stringify({ question }),
+        signal: running.controller.signal,
       });
       const seconds = (performance.now() - t0) / 1000;
       const body = await r.json().catch(() => ({}));
-      if (r.ok) showAnswer(body, r.headers.get("X-Request-ID"), seconds);
+      const requestId = r.headers.get("X-Request-ID");
+      if (r.ok) showAnswer(body, requestId, seconds);
       else showError(r.status, typeof body.detail === "string" ? body.detail : "", r.headers.get("Retry-After"));
     } catch (e) {
-      showError(0, "The service can't be reached. Check your connection and try again.");
+      if (e.name === "AbortError") result.replaceChildren(el("p", { class: "hint" }, "Cancelled."));
+      else showError(0, "The service can't be reached. Check your connection and try again.");
     } finally {
+      clearInterval(running.timer);
+      running = null;
       ask.disabled = false;
+      cancel.hidden = true;
+      enterHint.hidden = false;
       status.textContent = "";
     }
   });
