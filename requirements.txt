@@ -8,5 +8,5 @@ pydantic-settings==2.16.3
 psycopg[binary]==3.3.9
 pgvector==0.5.1
 numpy==2.5.5           # the query vector sent to pgvector
-google-genai==3.5.0
+google-genai==3.6.1
 sqlglot==30.35.0       # parses LLM-written SQL for the guardrails
