@@ -4,6 +4,41 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (5/7): the eval stops marking two kinds of correct answers wrong
+
+**Goal:** fix scoring false alarms found while reading the Day 11 failures. Changing the eval after seeing results can inflate the score, so each change below was checked against the source text, and the held-out set (scored once, later) is the outside check.
+
+### Exact amounts with cents (q033)
+
+"How much did the city collect in building permit fees in 2025?" The answer "$42,462,228.92" is the exact sum, but the check only accepted "42,462,229" or "42.5 million". `money()` in `evals/build_questions.py` now also accepts the exact amount with cents.
+
+### The department's own budget page (q068, q078, q079)
+
+Each department's figure appears twice in the proposed budget: in the summary table the eval expected (p138, p162) and on the department's own page (p140 for Public Health, p176 for Animal Care and Control). Both pages state the same number for the same department, so a citation of either one is correct. Those pages are now accepted sources.
+
+### Not changed: q012
+
+"In which month of 2025 were the most pothole complaints made?" The agent returns the month as a date (`2025-03-01`), the reference as a name (`March`). The answer is right ("March, with 4,788 complaints"), but the SQL execution check compares the first value and fails. It stays as a known false alarm rather than a special case in the scorer.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/build_questions.py` | `money()` accepts cents; q068, q078, q079 accept the department's page |
+| `evals/questions.jsonl` | Rebuilt: q033, q068, q078, q079 |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m evals.build_questions --check
+```
+
+### Concepts
+
+- **False alarm (false negative of the scorer):** a correct answer the automatic check marks wrong. Fix it in the scorer only when the source text shows the answer is right, or the score just measures how well the system matches the eval's wording.
+
+---
+
 ## Day 11 (4/7): two problems the first measured run found: ties and double rounding
 
 **Goal:** fix the two real failures left after the first Day 11 run (`day11-fixes`, 2026-11-26, the first on a paid key).

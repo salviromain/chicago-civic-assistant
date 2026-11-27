@@ -49,6 +49,8 @@ def dec(v, places=1) -> list[str]:
 def money(v) -> list[str]:
     v = float(v)
     out = {f"{v:,.0f}"}
+    if v != round(v):  # the exact amount with cents is right too: $42,462,228.92
+        out.add(f"{v:,.2f}")
     if v >= 1e9:
         out |= {f"{v / 1e9:.1f} billion", f"{v / 1e9:.2f} billion"}
     if v >= 1e6:
@@ -306,7 +308,7 @@ Q: list[dict] = [
          # Widened after the baseline: the budget also ties civilian hiring to overtime (p. 125)
          must=[["2025-11", "executive order", "Detention Aides", "monthly reports"]]),
     dict(id="q068", q="What is the proposed 2027 budget for the Chicago Department of Public Health?", route="docs", tags=["trap:proposed"],
-         chunks=["budget-2027-p138-1"], phrase="Chicago Department of Public Health | 347,937,660 | 333,468,767",
+         chunks=["budget-2027-p138-1", "budget-2027-p140-1"], phrase="Chicago Department of Public Health | 347,937,660 | 333,468,767",
          answer="$333,468,767 (proposed), down from $347,937,660 in 2026.", must=[money(333468767), ["propos"]]),
 
     # ---- both ----
@@ -352,12 +354,12 @@ Q: list[dict] = [
          must=lambda r: [num(r[0][0]), ["66"]]),
     dict(id="q078", q="How many requests did Animal Care and Control handle in 2025, and how much does the proposed 2027 budget give Chicago Animal Care and Control?", route="both",
          sql=f"SELECT count(*) FROM service_requests_311 WHERE owner_department = 'Animal Care and Control' AND {NOT_DUP} AND {Y2025}",
-         chunks=["budget-2027-p162-1"], phrase="Chicago Animal Care and Control | 8,177,388 | 9,530,803",
+         chunks=["budget-2027-p162-1", "budget-2027-p176-1"], phrase="Chicago Animal Care and Control | 8,177,388 | 9,530,803",
          answer=lambda r: f"{r[0][0]:,} requests; the proposed budget is $9,530,803.",
          must=lambda r: [num(r[0][0]), money(9530803)]),
     dict(id="q079", q="How many restaurant complaints were made in 2026, and what does the 2027 budget propose for the Chicago Department of Public Health?", route="both",
          sql=f"SELECT count(*) FROM service_requests_311 WHERE sr_short_code = 'HFB' AND {NOT_DUP} AND {Y2026}",
-         chunks=["budget-2027-p138-1"], phrase="Chicago Department of Public Health | 347,937,660 | 333,468,767",
+         chunks=["budget-2027-p138-1", "budget-2027-p140-1"], phrase="Chicago Department of Public Health | 347,937,660 | 333,468,767",
          answer=lambda r: f"{r[0][0]:,} restaurant complaints; the proposed budget is $333,468,767.",
          must=lambda r: [num(r[0][0]), money(333468767)]),
 
