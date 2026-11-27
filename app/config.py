@@ -18,10 +18,20 @@ class Settings(BaseSettings):
     service_api_key: str = "change-me"
     request_timeout_s: int = 30  # one /query request; past this the API answers 504
 
-    # Prices for the cost estimate, US$ per million tokens. 0 = free tier. Set them to
-    # the paid prices of llm_model to see what a request would cost (Day 12).
-    llm_usd_per_m_input: float = 0.0
-    llm_usd_per_m_output: float = 0.0
+    # Request limits for /query (app/ratelimit.py); 0 turns one off. Days end at midnight Pacific.
+    rate_limit_per_minute: int = 5     # per client
+    rate_limit_per_day: int = 50       # per client
+    rate_limit_total_per_day: int = 500  # whole service: at ~$0.003 a question, at most ~$1.50 a day
+    # Proxies in front of the app that append to X-Forwarded-For: 0 locally, 1 on Cloud Run.
+    # The client's address is read that many places from the right; never trust more.
+    trusted_proxies: int = 0
+    log_questions: bool = False  # off: strangers' questions stay out of the logs (length is logged)
+
+    # Prices for the cost estimate, US$ per million tokens: the paid list prices of
+    # gemini-3.1-flash-lite (change them with llm_model). The estimate is what a question
+    # costs at list price; on the free tier nothing is billed. 0 turns the estimate off.
+    llm_usd_per_m_input: float = 0.25
+    llm_usd_per_m_output: float = 1.50
 
     # Model choices (compare Flash vs Pro in the evals)
     llm_model: str = "gemini-3.1-flash-lite"  # 2.5 retired for new keys; 3.8/3.5 Flash took 268 s / 23 s on the free tier

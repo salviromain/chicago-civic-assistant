@@ -4,6 +4,82 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 12 (1/3): rate limits, and one JSON log line per request with latency, tokens and cost
+
+**Goal:** make `/query` safe to open to strangers: limit how many questions a client (and the whole service) can ask, and record what each request cost in time and money.
+
+### Rate limits (`app/ratelimit.py`)
+
+**Rate limiting** refuses requests past a set number per time window. Three limits, checked after the API key (so wrong keys don't use anyone's allowance):
+
+| Limit | Default | Protects against |
+| --- | --- | --- |
+| Per client, per minute | 5 | one client firing questions in a loop |
+| Per client, per day | 50 | one client using up the day for everyone |
+| Whole service, per day | 500 | cost: at ~$0.003 a question, at most ~$1.50 a day |
+
+A refused request gets **HTTP 429** ("Too Many Requests") with a **`Retry-After`** header: the seconds until it would be allowed. The minute limit is a **sliding window** (the last 60 s, not "this calendar minute", so a burst at :59 and :01 still counts as one minute). Days end at midnight Pacific, when Gemini's quota resets. The 503 for a used-up Gemini quota now also says so and carries `Retry-After`.
+
+The **client** is its IP address. Behind Cloud Run, the connection comes from Google's front end, and the real address is in the **`X-Forwarded-For`** header, where each proxy appends the address it saw. Anything to its left was written by the client and could be made up, so the app reads the entry `trusted_proxies` places from the right (0 locally, 1 on Cloud Run).
+
+Counts live in memory: they reset on restart and aren't shared between server instances. Day 13 deploys one instance, which is enough for a demo.
+
+### Logs (`app/logs.py`)
+
+Each `/query` writes one **structured log** line, JSON instead of free text, so fields can be filtered (Cloud Run turns `severity` into the log level and the rest into searchable fields):
+
+```json
+{"severity": "INFO", "message": "query", "request_id": "e5090a3ed8ee4e8c", "status": 200, "latency_ms": 3937,
+ "client": "ea1abf2e962e", "question_chars": 64, "route": "sql", "refused": false, "pipeline_ms": 3885,
+ "llm_calls": 3, "input_tokens": 21549, "output_tokens": 623, "cost_usd": 0.00632}
+```
+
+- `request_id` is also sent back as the `X-Request-ID` header: a user reporting a bad answer can quote it.
+- `client` is a **salted hash** of the IP address: the same client gets the same tag, but the tag can't be turned back into an address (the salt is random and new at every start).
+- The question's text is **not** logged by default (`LOG_QUESTIONS=true` to switch it on), only its length: strangers' questions stay private.
+- Errors log `error` (e.g. `QuotaExhausted`, `rate_limited`, `timeout`); 4xx are WARNING, 5xx ERROR.
+
+### Cost at list price
+
+`cost_usd` was 0 unless prices were set. The defaults are now the paid list prices of `gemini-3.1-flash-lite` ($0.25 / $1.50 per million input / output tokens), so every response and log line shows what the question costs. On the free-tier demo nothing is billed; the field's description says so.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/ratelimit.py` | New: `RateLimiter` (three limits), `client_address()`, `seconds_until_pacific_midnight()` |
+| `app/logs.py` | New: JSON log lines |
+| `app/main.py` | Rate-limit dependency after the key check; logging middleware; `X-Request-ID`; `Retry-After` on the quota 503 |
+| `app/config.py` | Limit settings, `trusted_proxies`, `log_questions`; list prices as defaults |
+| `tests/test_ratelimit.py` | New: sliding window, refused requests not counted, Pacific midnight (including the 25-hour day), spoofed `X-Forwarded-For` |
+| `tests/test_api.py` | 429 with `Retry-After`; wrong keys don't use the limit; service-wide limit; one JSON line per query; question text only when switched on |
+
+### A bug the tests caught
+
+`midnight - now` between two Python datetimes in the same time zone ignores a daylight-saving change between them: on 2026-11-01, a 25-hour day, it said 24 hours. The code compares timestamps instead.
+
+### Check it yourself
+
+```bash
+RATE_LIMIT_PER_MINUTE=3 .venv/bin/uvicorn app.main:app --port 8765
+# in another terminal, 4 times (the key from your .env):
+curl -s -o /dev/null -w "%{http_code} %header{retry-after}\n" -X POST localhost:8765/query \
+  -H "X-API-Key: $SERVICE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"question":"How many graffiti removal requests were made in ward 12 in 2025?"}'
+```
+
+Checked on a real server: 200, 200, 200, then 429 with `Retry-After: 56`, and one JSON line per request in the server output.
+
+### Concepts
+
+- **Rate limiting / 429 / Retry-After:** the standard way to say "too many, come back in N seconds"; well-behaved clients wait that long.
+- **Sliding window:** counts requests in the last 60 seconds from now, so there's no burst allowed at the edge of a calendar minute.
+- **X-Forwarded-For:** the header proxies use to pass on the client's address; only the entries your own proxies added can be trusted.
+- **Structured logging:** logs as data (JSON), so "every request over 8 s" or "total cost today" is a filter, not a text search.
+- **Salted hash:** hashing with a secret random prefix, so the same input always gives the same tag, but nobody can rebuild the input by hashing guesses.
+
+---
+
 ## Day 11 (7/7): measured: the fixes, the model choice, real latency, and the held-out score
 
 **Goal:** measure the Day 11 fixes, choose the answer model, measure latency with every call live, and score the held-out set once. First runs on the **paid tier** (2026-11-27): about $0.30 per full eval run, so runs are no longer rationed.

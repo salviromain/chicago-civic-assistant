@@ -290,7 +290,7 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
 
 
 def estimate_cost(input_tokens: int, output_tokens: int) -> float:
-    """US$ from token counts and the configured prices (0 on the free tier).
+    """US$ from token counts and the configured list prices (the free tier isn't billed).
     Counts every token sent, cached replies included: what the request would cost
     without the cache. Embeddings (one short question) are left out: a few tokens."""
     from app.config import get_settings

@@ -35,7 +35,7 @@ class QueryResponse(BaseModel):
     refused: bool = Field(False, description="True when the sources did not support an answer")
     latency_ms: int
     cost_usd: float | None = Field(None, description=(
-        "Estimated LLM cost from token counts and the configured prices; 0 on the free tier"))
+        "Estimated LLM cost at the configured list prices, cached replies included (the free tier is not billed)"))
     usage: Usage = Usage()
 
 
