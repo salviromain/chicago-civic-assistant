@@ -4,6 +4,26 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## README: the passage behind each claim
+
+**Goal:** the README describes the excerpts and the new `highlights` field.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `README.md` | "What makes the answers trustworthy": each document citation shows the passage behind the claim, highlighted; "Try it": the `highlights` field of a citation |
+
+### Check it yourself
+
+Read "How it works" and "Try it" in `README.md`.
+
+### Concepts
+
+- **Documenting an API change:** a new response field is only useful to API users once the docs mention it (FastAPI's `/docs` page lists it automatically from `app/schemas.py`).
+
+---
+
 ## Demo GIF and screenshot re-recorded with the new page
 
 **Goal:** the README shows the page as it is now (grouped examples, the passage behind the answer with its words marked).

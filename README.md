@@ -50,14 +50,14 @@ What makes the answers trustworthy:
 - **The model never touches the database directly.** Its SQL is parsed (one `SELECT`, only the three tables, only allow-listed functions, a row limit), then run as a role that is read-only by itself, inside a read-only transaction with a timeout.
 - **Rules a regular expression can check are checked in code, not just asked for in the prompt** (`app/sql_review.py`): 311 duplicates excluded, city-generated requests kept, average vs. median, ties hidden by `LIMIT 1`. A problem goes back to the model once to fix.
 - **Data traps are documented and tested**: `ILIKE '%tree%'` also matches "Street", the heat rule moved from section 13-196-410 to 14X-8-802.2.2 but the violations data still cites the old number, the budget is proposed, not adopted ([docs/TABLES.md](docs/TABLES.md), [docs/SOURCES.md](docs/SOURCES.md)).
-- **Citations are built by code from the sources actually given to the model**; an answer with no valid citation is turned into a refusal.
+- **Citations are built by code from the sources actually given to the model**; an answer with no valid citation is turned into a refusal. Each document citation shows the passage behind the claim, with the matching words highlighted, so a claim can be checked in seconds (`app/excerpt.py`).
 
 ## Try it
 
 - **Web page:** https://civic-api-408605137306.us-east5.run.app (needs an API key: ask the owner). The demo runs on Gemini's free tier, so answers can take 15–30 s when it's busy.
 - **API:** `POST /query` with `{"question": "..."}` and an `X-API-Key` header; reference at [`/docs`](https://civic-api-408605137306.us-east5.run.app/docs).
 
-The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, docs or both), the `citations` (the SQL that ran, or the code section / budget page with a link), `refused`, `latency_ms`, token `usage` and `cost_usd`. Errors: `401` bad key, `422` bad input, `429` too many questions (per client: 5 a minute, 50 a day; `Retry-After` says when to try again), `502` the language model failed, `503` database down or daily quota used up, `504` no answer within 30 s. Each response has an `X-Request-ID` header that matches its line in the server log.
+The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, docs or both), the `citations` (the SQL that ran, or the code section / budget page with a link and the passage behind the claim; `highlights` lists that passage's words that match the answer), `refused`, `latency_ms`, token `usage` and `cost_usd`. Errors: `401` bad key, `422` bad input, `429` too many questions (per client: 5 a minute, 50 a day; `Retry-After` says when to try again), `502` the language model failed, `503` database down or daily quota used up, `504` no answer within 30 s. Each response has an `X-Request-ID` header that matches its line in the server log.
 
 ## Run it locally
 
