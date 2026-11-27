@@ -16,11 +16,18 @@ class QueryRequest(BaseModel):
                           examples=["How many heat violations were recorded last winter, and what does the city code require landlords to provide?"])
 
 
+class Passage(BaseModel):
+    text: str
+    highlights: list[str] = Field([], description="Words in the passage that match the claim, to highlight")
+
+
 class Citation(BaseModel):
     source: str = Field(..., description="Table name or document section, e.g. 'Municipal Code 14X-8-802.2.2'")
-    snippet: str | None = Field(None, description="The supporting text or the SQL that was run")
+    snippet: str | None = Field(None, description="The supporting text (all passages) or the SQL that was run")
     url: str | None = None
     highlights: list[str] = Field([], description="Words in the snippet that match the answer, to highlight")
+    passages: list[Passage] = Field([], description=(
+        "Documents only: the passage behind each claim citing this source, in document order"))
 
 
 class Usage(BaseModel):

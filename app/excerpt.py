@@ -13,6 +13,10 @@ Words are compared by a rough stem ("rodents" = "rodent", "heating" = "heat"), e
 counted once, so a passage can't win by repeating one word. Numbers count more than
 words: "914,383,396" pins the budget line exactly; years count less (every budget page
 says 2027).
+
+When the answer cites one chunk for two claims ("two days' notice before entry [D1]
+... notice within two days after an emergency entry [D1]"), best_passages() picks a
+passage for each claim, so each claim's evidence is shown.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ import re
 from dataclasses import dataclass, field
 
 LIMIT = 400
+MOST = 3       # passages per citation: one per claim citing it, up to this many
 
 STOP = set("""
 about after also among another and any are been before being both but can cannot could
@@ -34,6 +39,9 @@ require required requires requirement requirements
 
 TOKEN = re.compile(r"\d{1,2}:\d\d|\d[\d,]*(?:\.\d+)?|[A-Za-z]+")   # 8:30 is one token
 SUFFIXES = ("ations", "ation", "ings", "ing", "ed", "es", "s")
+# "two days" is a number to match like "60 days" ("one" is left out: "one or more")
+NUMBER_WORDS = set("two three four five six seven eight nine ten eleven twelve fifteen "
+                   "twenty thirty sixty ninety hundred".split())
 
 
 def stem(token: str) -> str | None:
@@ -42,6 +50,8 @@ def stem(token: str) -> str | None:
         number = token.replace(",", "").rstrip(".")
         return number if len(number) >= 2 else None
     word = token.lower()
+    if word in NUMBER_WORDS:
+        return word
     if len(word) < 4 or word in STOP:
         return None
     for suffix in SUFFIXES:
@@ -52,6 +62,8 @@ def stem(token: str) -> str | None:
 
 
 def weight(term: str) -> float:
+    if term in NUMBER_WORDS:
+        return 2.0   # "two" days, like 60 days
     if not term[0].isdigit():
         return 1.0
     if re.fullmatch(r"(19|20)\d\d", term):
@@ -108,13 +120,32 @@ def _fit(text: str) -> list[str]:
 def best_passage(body: str, focus: str = "", limit: int = LIMIT) -> Excerpt:
     """The stretch of whole pieces, at most `limit` characters, that shares the most
     with `focus` (the claim and the question). No match: the start of the body."""
+    return (best_passages(body, [focus], limit) or [Excerpt("")])[0]
+
+
+def best_passages(body: str, focuses: list[str], limit: int = LIMIT, most: int = MOST) -> list[Excerpt]:
+    """One passage per focus (each claim citing the chunk, with the question), in the
+    order they appear in the chunk. Passages that overlap or touch become one, so the
+    same sentence is never shown twice. At most `most` claims get a passage."""
     parts = pieces(body)
     if not parts:
-        return Excerpt("")
-    wanted = terms(focus)
+        return []
+    wanted_sets = [terms(f) for f in (focuses or [""])[:most]]
+    picks = sorted(((*_choose(parts, w, limit), w) for w in wanted_sets), key=lambda p: p[:2])
+    merged: list[list] = []
+    for i, j, wanted in picks:
+        if merged and i <= merged[-1][1]:   # overlaps or touches the previous one
+            merged[-1][1] = max(merged[-1][1], j)
+            merged[-1][2] = merged[-1][2] | wanted
+        else:
+            merged.append([i, j, wanted])
+    return [_render(parts, i, j, wanted) for i, j, wanted in merged]
+
+
+def _choose(parts: list[tuple[str, str]], wanted: set[str], limit: int) -> tuple[int, int]:
+    """Pieces i..j-1: the window that fits in `limit` and shares the most with `wanted`."""
 
     def window(i: int) -> tuple[float, int, int]:
-        """Pieces i..j-1 that fit in the limit, and their score."""
         length, j, found = 0, i, set()
         while j < len(parts):
             extra = len(parts[j][1]) + (len(parts[j][0]) if j > i else 0)
@@ -129,6 +160,10 @@ def best_passage(body: str, focus: str = "", limit: int = LIMIT) -> Excerpt:
     # wins, a tie keeps the earlier one. Nothing matches: the start of the chunk.
     starts = [i for i, (_, piece) in enumerate(parts) if terms(piece) & wanted] or [0]
     _, i, j = max((window(i) for i in starts), key=lambda w: (w[0], -w[1]))
+    return i, j
+
+
+def _render(parts: list[tuple[str, str]], i: int, j: int, wanted: set[str]) -> Excerpt:
     text = parts[i][1] + "".join(sep + p for sep, p in parts[i + 1:j])
     if j < len(parts):   # more follows: "rooms. …", "rodents;…"
         text += " …" if text.endswith(".") else "…"

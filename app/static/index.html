@@ -226,10 +226,15 @@
         const li = el("li", { id: "src-" + (i + 1) }, el("div", { class: "src" }, name));
         if (c.snippet) {
           // SQL stays folded; a document excerpt is the evidence, so it's shown open
+          // One passage per claim citing the source (older responses: the snippet alone)
           const isSql = /^\s*(SELECT|WITH)\b/i.test(c.snippet);
+          const passages = Array.isArray(c.passages) && c.passages.length
+            ? c.passages : [{ text: c.snippet, highlights: c.highlights }];
+          const label = passages.length > 1 ? "The passages behind the answer" : "The passage behind the answer";
           const snip = el("details", { class: "snip" },
-            el("summary", {}, isSql ? "The SQL query that ran" : "The passage behind the answer"),
-            isSql ? el("pre", {}, c.snippet) : highlighted("blockquote", c.snippet, c.highlights));
+            el("summary", {}, isSql ? "The SQL query that ran" : label),
+            ...(isSql ? [el("pre", {}, c.snippet)]
+                      : passages.map((p) => highlighted("blockquote", String(p.text || ""), p.highlights))));
           snip.open = !isSql;
           li.append(snip);
         }

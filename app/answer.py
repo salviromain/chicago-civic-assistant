@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
 from app.router import RouteDecision, route_question
-from app.schemas import Citation, QueryResponse, Usage
+from app.schemas import Citation, Passage, QueryResponse, Usage
 from app.sql_agent import SqlResult
 
 PREVIEW_ROWS = 50     # rows of a SQL result shown to the answer model
@@ -172,22 +172,25 @@ def sql_citation(r: SqlResult) -> Citation:
     return Citation(source=f"Chicago Data Portal: {names}", snippet=r.sql, url=url)
 
 
-def doc_citation(c: dict, focus: str = "") -> Citation:
-    """The chunk's passage that best matches `focus` (the claim citing it and the
-    question), with the matching words to highlight. No focus: the chunk's start."""
-    from app.excerpt import best_passage
+def doc_citation(c: dict, claims: list[str] | None = None, question: str = "") -> Citation:
+    """The chunk's passage behind each claim citing it (the claim plus the question),
+    with the matching words to highlight. No claims: the chunk's start."""
+    from app.excerpt import best_passages
     body = c["text"].split("\n", 1)[-1].strip()   # the first line is the heading
-    excerpt = best_passage(body, focus, SNIPPET_CHARS)
-    return Citation(source=doc_label(c), snippet=excerpt.text, url=c.get("url"),
-                    highlights=excerpt.highlights)
+    focuses = [f"{claim} {question}" for claim in claims] if claims else [question]
+    excerpts = best_passages(body, focuses, SNIPPET_CHARS)
+    highlights = list({w.lower(): w for e in excerpts for w in e.highlights}.values())
+    return Citation(source=doc_label(c), snippet="\n\n".join(e.text for e in excerpts) or None,
+                    url=c.get("url"), highlights=highlights,
+                    passages=[Passage(text=e.text, highlights=e.highlights) for e in excerpts])
 
 
-def claims_by_id(text: str) -> dict[str, str]:
-    """Source id -> the sentences of the answer that cite it."""
-    claims: dict[str, str] = {}
+def claims_by_id(text: str) -> dict[str, list[str]]:
+    """Source id -> the sentences of the answer that cite it, one claim each."""
+    claims: dict[str, list[str]] = {}
     for sentence in re.split(r"(?<=[.!?])\s+", text):
         for sid in cited_ids(sentence):
-            claims[sid] = f"{claims.get(sid, '')} {_ID.sub('', sentence)}".strip()
+            claims.setdefault(sid, []).append(_ID.sub("", sentence).strip())
     return claims
 
 
@@ -288,7 +291,7 @@ def run(question: str, today: dt.date | None = None, *, model: str | None = None
     claims = claims_by_id(draft.answer)
     for i, c in enumerate(trace.chunks, 1):
         if f"D{i}" in claims and f"D{i}" in available:
-            available[f"D{i}"] = doc_citation(c, f"{claims[f'D{i}']} {question}")
+            available[f"D{i}"] = doc_citation(c, claims[f"D{i}"], question)
     text, citations = link_citations(draft.answer, available)
     ids = {"T1": "T1", **{f"D{i}": c["id"] for i, c in enumerate(trace.chunks, 1)}}
     trace.cited = [ids[sid] for sid in cited_ids(draft.answer) if sid in available]

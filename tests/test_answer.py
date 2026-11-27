@@ -145,3 +145,19 @@ def test_cited_excerpt_shows_the_passage_behind_the_claim():
     c = trace.response.citations[0]
     assert "exterminate insects, rodents" in c.snippet and "rodents" in c.highlights
     assert not c.snippet.startswith("Tenant remedies")   # the heading line isn't part of the excerpt
+
+
+def test_a_source_cited_for_two_claims_shows_a_passage_for_each():
+    entry = dict(HEAT, id="5-12-050", section="5-12-050", title="Landlord's right of access",
+                 text="5-12-050 Landlord's right of access\n"
+                 "The landlord shall give the tenant notice of intent to enter of no less than two days. "
+                 + "Such notice shall be provided by mail, telephone or other reasonable means. " * 6
+                 + "In an emergency the landlord shall give the tenant notice within two days after such entry.")
+    d = RouteDecision(reasoning="r", route=Route.docs, docs_question="q")
+    answer = ("Your landlord must give two days' notice before entering [D1]. "
+              "After an emergency entry, they must tell you within two days after the entry [D1].")
+    trace, _, _ = go(d, AnswerDraft(answer=answer, refused=False), chunks=[entry])
+    [c] = trace.response.citations
+    assert len(c.passages) == 2
+    assert "no less than two days" in c.passages[0].text and "emergency" in c.passages[1].text
+    assert c.snippet == "\n\n".join(p.text for p in c.passages)

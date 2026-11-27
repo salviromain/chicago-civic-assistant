@@ -1,6 +1,6 @@
 """The citation excerpt shows the passage that supports the claim (app/excerpt.py)."""
 
-from app.excerpt import LIMIT, best_passage, pieces, stem
+from app.excerpt import LIMIT, best_passage, best_passages, pieces, stem, weight
 
 FILLER = "\n\n".join(f"Failure to maintain item number {n} as required by the building rules;" for n in range(12))
 SECTION = (FILLER + "\n\nFailure to exterminate insects, rodents or other pests;\n\n"
@@ -12,6 +12,7 @@ def test_stems_group_word_forms_and_drop_common_words():
     assert stem("heating") == stem("heats") == "heat"
     assert stem("the") is None and stem("shall") is None and stem("a") is None
     assert stem("914,383,396") == "914383396" and stem("8:30") == "8:30"
+    assert stem("two") == "two" and weight("two") == 2.0 and stem("one") is None   # "two days"
 
 
 def test_picks_the_passage_behind_the_claim_not_the_start():
@@ -52,3 +53,30 @@ def test_excerpt_starts_at_a_matching_sentence_not_the_filler_before_it():
             "The landlord shall give the tenant two days notice before entry.\n\nClosing text.")
     e = best_passage(body, "Two days notice before entering.")
     assert e.text.startswith("…The landlord shall give")
+
+
+ENTRY = ("The landlord shall give the tenant two days notice before entry. "
+         + "Other words about mail and telephone and reasonable means. " * 8
+         + "In an emergency the landlord shall give notice within two days after entry.")
+
+
+def test_one_passage_per_claim_in_document_order():
+    claims = ["After an emergency entry the landlord must give notice within two days after entry.",
+              "The landlord must give two days notice before entry."]
+    passages = best_passages(ENTRY, claims)
+    assert len(passages) == 2
+    assert passages[0].text.startswith("The landlord shall give the tenant two days notice before")
+    assert "emergency" in passages[1].text and passages[1].text.startswith("…")
+    assert "emergency" in passages[1].highlights and "emergency" not in passages[0].highlights
+
+
+def test_claims_with_the_same_passage_show_it_once():
+    passages = best_passages(SECTION, ["Landlords must exterminate rodents.", "Rodents must be exterminated."])
+    assert len(passages) == 1 and "exterminate insects, rodents" in passages[0].text
+
+
+def test_at_most_three_passages():
+    body = "\n\n".join(f"Rule {w} applies here. " + "Filler sentence. " * 30
+                       for w in ("alpha", "bravo", "charlie", "delta"))
+    claims = [f"Rule {w} applies." for w in ("alpha", "bravo", "charlie", "delta")]
+    assert len(best_passages(body, claims)) == 3

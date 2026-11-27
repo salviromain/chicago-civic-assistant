@@ -4,6 +4,52 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Citations: one passage per claim
+
+**Goal:** when the answer cites one source for two claims, show the passage behind each. Before, the claims were joined into one focus and only the best-matching passage was shown, so one claim's evidence could be missing. Example (5-12-050, landlord's right of access): the answer said "two days' notice before entering [1]" and "notify the tenant within two days after an emergency entry [1]", and the excerpt showed only the second rule.
+
+### How it works (`app/excerpt.py`)
+
+1. `claims_by_id` now keeps each sentence citing a source as its own **claim**, instead of joining them.
+2. `best_passages(body, focuses)` picks a passage for each claim (claim + question), with the same scoring as before.
+3. Passages that **overlap** or touch are **merged** into one stretch, so a sentence is never shown twice; the rest are shown in the order they appear in the document. At most 3 claims per source get a passage.
+4. **Number words** count as numbers: "two days" now matches like "60 days" (weight 2). Without this, `two` was dropped as a short word, and the two 5-12-050 rules ("no less than two days" before, "within two days after") looked alike: both claims also paraphrased list item (f), and both picked the list.
+
+The API's `Citation` gets `passages: [{text, highlights}]`; `snippet` (all passages, separated by a blank line) and `highlights` (all of them) stay for older clients. The page shows one quote block per passage, under "The passages behind the answer".
+
+### Checked on real answers
+
+Old vs. new excerpts on every cited document in the Day 11 and held-out runs (70 citations, answers rebuilt from the saved results): 53 the same, 17 changed. 8 citations now show 2 or 3 passages, each the evidence for a different claim (lockout: the rule, the police investigation, the damages; fire damage: the right to move out, the rent cut, the repair notice). The rest pick a different single passage or merge into one longer stretch (q045: three claims, one continuous 1,011-character passage). No change showed a worse passage. Checked on the page (light and dark): 5-12-050 shows both rules.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/excerpt.py` | `best_passages()`; `_choose` / `_render` split out of `best_passage` (which now calls it); number words |
+| `app/answer.py` | `claims_by_id` returns a list per source; `doc_citation(c, claims, question)` builds the passages |
+| `app/schemas.py` | `Passage`; `Citation.passages` |
+| `app/static/index.html` | One quote block per passage (falls back to `snippet` for older responses) |
+| `tests/test_excerpt.py`, `tests/test_answer.py` | Two claims → two passages in document order; the same passage shown once; at most 3; end to end through `run()` |
+| `README.md` | The `passages` field; 199 tests |
+
+### Check it yourself
+
+```bash
+.venv/bin/pytest -q tests/test_excerpt.py tests/test_answer.py
+.venv/bin/python -c "
+from app.answer import answer
+r = answer('How much notice must my landlord give before entering my apartment, and when can they enter without notice?')
+for c in r.citations:
+    for p in c.passages: print(p.text, end='\n\n')"
+```
+
+### Concepts
+
+- **Claim:** one sentence of the answer that cites a source. One source can back several claims, each with its own evidence.
+- **Overlapping intervals, merged:** two passages are ranges of sentences (start, end). Sorted by start, a range that begins before the previous one ends is joined to it. The same idea merges calendar bookings or time ranges.
+
+---
+
 ## Plain-model baseline: what the data and documents add
 
 **Goal:** measure the README's claim that "a plain chatbot answers confidently and often wrongly", instead of asserting it. The before/after numbers (84.4% → 100%) show the fixes worked; they don't show the system beats a simpler approach. Day 10's outside comparison (Claude + an open-data MCP server) was skipped (it needs a paid Anthropic key); this is the cheap, controlled version.
