@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:  # "Run workflow" button in the Actions tab
 
 jobs:
   test:
@@ -16,7 +17,38 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
-      # Day 13: add a small eval subset here, e.g.
-      # - run: python -m evals.run_evals --subset 10
-      #   env:
-      #     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+  # A small live eval on every pull request (Day 13): 10 questions across the three
+  # routes, the main data traps and two refusals, against the Neon database as
+  # civic_reader. No judge; about 25 Gemini calls on the free demo key, ~4 minutes.
+  # Fails if answer checks or refusals drop below 80%, or a question errors.
+  eval:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      READONLY_DATABASE_URL: ${{ secrets.READONLY_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Skip without secrets
+        if: env.GEMINI_API_KEY == '' || env.READONLY_DATABASE_URL == ''
+        run: echo "::warning::GEMINI_API_KEY or READONLY_DATABASE_URL is not set; eval skipped"
+      - name: Eval subset
+        if: env.GEMINI_API_KEY != '' && env.READONLY_DATABASE_URL != ''
+        run: >
+          python -m evals.run_evals --label ci --no-judge --fail-under 0.8
+          --ids q005,q014,q021,q037,q038,q063,q070,q078,q081,q084
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-ci
+          path: evals/results/ci*
+          if-no-files-found: ignore

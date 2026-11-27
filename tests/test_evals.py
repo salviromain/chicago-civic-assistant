@@ -111,3 +111,13 @@ def test_holdout_set_shape():
     for q in qs:
         if q["answerable"]:
             assert must_contain_ok(q["reference_answer"], q["answer_must_contain"]), q["id"]
+
+
+def test_ci_gate():
+    from evals.run_evals import gate
+    good = {"questions": 10, "answer_checks": (0.9, 9), "correct_refusals": (1.0, 1)}
+    assert gate(good, expected=10, errors=0, threshold=0.8) == []
+    assert "answer_checks 70% < 80%" in gate({**good, "answer_checks": (0.7, 9)}, 10, 0, 0.8)
+    assert any("errored" in p for p in gate({**good, "questions": 9}, 10, 1, 0.8))
+    assert any("quota" in p for p in gate({**good, "questions": 6}, 10, 0, 0.8))  # stopped early
+    assert gate({**good, "correct_refusals": None}, 10, 0, 0.8) == []  # no unanswerable question in the set

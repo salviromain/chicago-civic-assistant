@@ -1,0 +1,160 @@
+{
+  "label": "ci",
+  "date": "2026-11-27",
+  "minutes": 4.0,
+  "errors": [],
+  "model": "gemini-3.1-flash-lite",
+  "search_mode": "vector",
+  "sql_thinking_level": null,
+  "judge_model": null,
+  "all": {
+    "questions": 10,
+    "router_accuracy": [
+      1.0,
+      10
+    ],
+    "sql_execution": [
+      1.0,
+      6
+    ],
+    "recall@5": [
+      1.0,
+      4
+    ],
+    "mrr": [
+      0.8333333333333334,
+      4
+    ],
+    "answer_checks": [
+      1.0,
+      8
+    ],
+    "correct_refusals": [
+      1.0,
+      2
+    ],
+    "false_refusals": [
+      0.0,
+      8
+    ],
+    "citation_accuracy": [
+      1.0,
+      8
+    ],
+    "latency_p50_s": 26.23,
+    "latency_p95_s": 36.88,
+    "latency_p50_s_no_pacing": 16.86,
+    "latency_p95_s_no_pacing": 35.13,
+    "latency_measured_on": 10,
+    "tokens_per_question": 13912,
+    "cost_per_question_usd": 0.003942
+  },
+  "route_sql": {
+    "questions": 4,
+    "router_accuracy": [
+      1.0,
+      4
+    ],
+    "sql_execution": [
+      1.0,
+      4
+    ],
+    "recall@5": null,
+    "mrr": null,
+    "answer_checks": [
+      1.0,
+      4
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      4
+    ],
+    "citation_accuracy": [
+      1.0,
+      4
+    ],
+    "latency_p50_s": 31.95,
+    "latency_p95_s": 36.48,
+    "latency_p50_s_no_pacing": 31.95,
+    "latency_p95_s_no_pacing": 35.13,
+    "latency_measured_on": 4,
+    "tokens_per_question": 19575,
+    "cost_per_question_usd": 0.005596
+  },
+  "route_docs": {
+    "questions": 2,
+    "router_accuracy": [
+      1.0,
+      2
+    ],
+    "sql_execution": null,
+    "recall@5": [
+      1.0,
+      2
+    ],
+    "mrr": [
+      0.6666666666666666,
+      2
+    ],
+    "answer_checks": [
+      1.0,
+      2
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      2
+    ],
+    "citation_accuracy": [
+      1.0,
+      2
+    ],
+    "latency_p50_s": 26.23,
+    "latency_p95_s": 26.23,
+    "latency_p50_s_no_pacing": 8.89,
+    "latency_p95_s_no_pacing": 8.89,
+    "latency_measured_on": 2,
+    "tokens_per_question": 3664,
+    "cost_per_question_usd": 0.001047
+  },
+  "route_both": {
+    "questions": 2,
+    "router_accuracy": [
+      1.0,
+      2
+    ],
+    "sql_execution": [
+      1.0,
+      2
+    ],
+    "recall@5": [
+      1.0,
+      2
+    ],
+    "mrr": [
+      1.0,
+      2
+    ],
+    "answer_checks": [
+      1.0,
+      2
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      2
+    ],
+    "citation_accuracy": [
+      1.0,
+      2
+    ],
+    "latency_p50_s": 36.88,
+    "latency_p95_s": 36.88,
+    "latency_p50_s_no_pacing": 16.86,
+    "latency_p95_s_no_pacing": 16.86,
+    "latency_measured_on": 2,
+    "tokens_per_question": 19204,
+    "cost_per_question_usd": 0.0054
+  }
+}

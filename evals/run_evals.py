@@ -29,6 +29,7 @@ import datetime as dt
 import json
 import re
 import statistics
+import sys
 import time
 from pathlib import Path
 
@@ -263,6 +264,9 @@ def main() -> None:
     p.add_argument("--model", help="answer model for the whole pipeline (default: llm_model)")
     p.add_argument("--search-mode", choices=["vector", "keyword", "hybrid"])
     p.add_argument("--sql-thinking", help="thinking level for the SQL agent: minimal, low, medium, high")
+    p.add_argument("--fail-under", type=float, help=(
+        "exit with an error if answer checks or correct refusals fall below this share, "
+        "or any question errored or wasn't run (CI uses 0.8)"))
     p.add_argument("--timing-from", help=(
         "results .jsonl of an earlier live run: re-scoring from the cache takes ~0 s per "
         "question, so take each question's timings from that run instead"))
@@ -326,6 +330,8 @@ def main() -> None:
                   f"{'  FAILED: ' + marks if marks else ''}", flush=True)
 
     if not recs:
+        if args.fail_under is not None:
+            sys.exit("FAILED: no question was answered")
         return
     summary = {"label": args.label, "date": dt.date.today().isoformat(),
                "minutes": round((time.perf_counter() - start) / 60, 1), "errors": errors}
@@ -344,6 +350,24 @@ def main() -> None:
     (RESULTS / f"{args.label}-summary.json").write_text(json.dumps(summary, indent=2, default=str) + "\n")
     print(f"\n{args.label}: {len(recs)} questions, {len(errors)} errors, {summary['minutes']} min\n{fmt(summary['all'])}")
     print(f"\nDetails: {out}\nSummary: {RESULTS / (args.label + '-summary.json')}")
+    if args.fail_under is not None:
+        problems = gate(summary["all"], len(qs), len(errors), args.fail_under)
+        if problems:
+            sys.exit("FAILED: " + "; ".join(problems))
+        print(f"passed: every metric at or above {args.fail_under:.0%}")
+
+
+def gate(metrics: dict, expected: int, errors: int, threshold: float) -> list[str]:
+    """Why a CI eval run fails, or [] if it passes."""
+    problems = []
+    if metrics["questions"] + errors < expected:
+        problems.append(f"only {metrics['questions'] + errors} of {expected} questions ran (quota?)")
+    if errors:
+        problems.append(f"{errors} questions errored")
+    for name in ("answer_checks", "correct_refusals"):
+        if metrics.get(name) and metrics[name][0] < threshold:
+            problems.append(f"{name} {metrics[name][0]:.0%} < {threshold:.0%}")
+    return problems
 
 
 if __name__ == "__main__":

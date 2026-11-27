@@ -4,6 +4,50 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (3/4): CI runs a small live eval on every pull request
+
+**Goal:** catch a change that breaks answers before it's merged, not only one that breaks the unit tests.
+
+### The eval job (`.github/workflows/ci.yml`)
+
+On every pull request (and from the Actions tab, "Run workflow"), after the tests pass: 10 questions chosen to cover the three routes, the main traps and refusals, answered live against Neon as `civic_reader`, without the judge:
+
+| Questions | What they check |
+| --- | --- |
+| q005, q014, q021, q037 | City-generated requests kept, "open fire hydrant" is a type, ties, average vs. median |
+| q038, q063 | A code section, a budget figure |
+| q070, q078 | Both routes in one question |
+| q081, q084 | Refusals: no community area in violations; hot water temperature not in the loaded chapters |
+
+`run_evals --fail-under 0.8` makes the job fail if answer checks or correct refusals fall below 80%, a question errors, or the run stops early (quota). The results are kept as a download (artifact `eval-ci`). Without the two GitHub secrets, the job skips with a warning instead of failing.
+
+**Dry run, set up exactly as CI** (demo key, Neon, empty cache, no judge): 10/10, passed, 4.0 minutes, ~25 calls on the free key (`evals/results/ci-dryrun-free-tier-summary.json`). Free-tier latency in that run: p50 17 s, p95 35 s without pacing.
+
+### Secrets it needs (GitHub → Settings → Secrets and variables → Actions)
+
+- `GEMINI_API_KEY`: the free demo key (CI costs $0; a day when the demo used up the quota fails CI that day).
+- `READONLY_DATABASE_URL`: the Neon `civic_reader` URL.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `.github/workflows/ci.yml` | `eval` job; `workflow_dispatch` |
+| `evals/run_evals.py` | `--fail-under` and `gate()` |
+| `tests/test_evals.py` | The gate: passes, low score, errors, early stop, no refusal questions |
+| `evals/results/ci-dryrun-free-tier-summary.json` | The dry run |
+
+### Check it yourself
+
+After adding the secrets: GitHub → Actions → CI → Run workflow, or open a pull request.
+
+### Concepts
+
+- **Eval in CI:** unit tests check code paths with fake models; a small live eval checks that real answers are still right. It's kept small because every run costs calls.
+- **Quality gate:** a threshold that turns a score into pass/fail, so a regression blocks the merge instead of being noticed later.
+
+---
+
 ## Day 13 (2/4): live on Cloud Run, next to the database
 
 **Goal:** a public HTTPS endpoint running the Day 12 image, with secrets from Secret Manager and the least access needed.
