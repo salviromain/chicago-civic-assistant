@@ -4,6 +4,30 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Demo GIF and screenshot re-recorded with the new page
+
+**Goal:** the README shows the page as it is now (grouped examples, the passage behind the answer with its words marked).
+
+Recorded the same way as on Day 14, so the two are comparable: a local server on the real database and the paid key, the same question ("How many rat complaints were made in ward 1 in 2026, and what must a landlord do about rodents?"), driven in headless Chrome. The reply cache pointed at an empty folder (`LLM_CACHE_DIR`), so all 4 model calls were live and the time shown is real: **5.7 s** (Day 14: 4.2 s; Gemini's speed varies from call to call). Same answer as Day 14: 1,099 complaints (SQL on code `SGA`, duplicates excluded) and section 5-12-110, whose excerpt now starts at "Failure to maintain the foundation, exterior walls or exterior roof … protected against rodents".
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `docs/demo.gif` | 11 frames: typing, asking, the answer, the sources (349 KB) |
+| `docs/screenshot.png` | The answer with its sources open |
+| `README.md` | The caption under the GIF: highlighted sentence, 5.7 s |
+
+### Check it yourself
+
+Open the repository page on GitHub: the new GIF plays at the top.
+
+### Concepts
+
+- **Comparable measurements:** re-recording with the same question, setup and cold cache means the only differences in the picture are the page changes (plus Gemini's normal variation in speed).
+
+---
+
 ## Page: excerpts that show the evidence, a live timer and Cancel, examples that ask
 
 **Goal:** five fixes from a look at the page (`docs/screenshot.png`). Most important: the excerpt under a document citation should show the text that supports the answer.

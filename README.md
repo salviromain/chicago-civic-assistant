@@ -5,7 +5,7 @@ Ask questions about Chicago in plain English and get answers that **cite their s
 ![Asking a question that needs both a data table and the Municipal Code](docs/demo.gif)
 
 > "How many rat complaints were made in ward 1 in 2026, and what must a landlord do about rodents?"
-> → 1,099 complaints, from a SQL query over 1.8 million 311 requests [1], and the landlord's duty from Municipal Code section 5-12-110 [2]. 4.2 s.
+> → 1,099 complaints, from a SQL query over 1.8 million 311 requests [1], and the landlord's duty from Municipal Code section 5-12-110 [2], with the sentence that says so highlighted. 5.7 s (paid tier, nothing cached).
 
 ## The problem
 
