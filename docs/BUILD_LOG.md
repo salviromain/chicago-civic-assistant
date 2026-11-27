@@ -4,6 +4,69 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Plain-model baseline: what the data and documents add
+
+**Goal:** measure the README's claim that "a plain chatbot answers confidently and often wrongly", instead of asserting it. The before/after numbers (84.4% → 100%) show the fixes worked; they don't show the system beats a simpler approach. Day 10's outside comparison (Claude + an open-data MCP server) was skipped (it needs a paid Anthropic key); this is the cheap, controlled version.
+
+### The setup (`evals/plain_baseline.py`)
+
+The same model (`gemini-3.1-flash-lite`) answers each of the 87 questions **from memory**: no SQL, no documents, no search. One call per question. To keep it a fair test, not a **straw man** (a version built to lose):
+
+- it gets today's date, a description of what the questions cover, and the same answer rules as the real system (be specific, say "proposed" for the budget, be brief);
+- it may say it doesn't know (`refused=true`), which counts as a refusal, not a wrong answer.
+
+Scored by the same deterministic checks and refusal checks. The pipeline-only metrics (route, SQL, retrieval, citations) don't exist for it, and faithfulness doesn't apply: with no sources, every claim is "unsupported". The judge still grades correctness against the reference.
+
+### Results (2026-11-27, `evals/results/baseline-plain-summary.json`)
+
+| | Plain model | This system (Day 11) |
+| --- | --- | --- |
+| Answer checks | 27.3% (21/77) | 100% |
+| Data-table questions | 1/33 (declines 32) | 33/33 |
+| City code questions | 20/27 | 27/27 |
+| Budget questions | 0/7 (all 7 answered, all wrong) | 7/7 |
+| Both | 0/10 | 10/10 |
+| Wrong answers | 17 of its 38 answers | 0 |
+| Unanswerable answered anyway | 3/10 | 0/10 |
+| Judge correctness | 24.7% | 98.7% |
+| Latency p50 / cost | 0.8 s / $0.00015 | 2.3 s / $0.003 |
+
+What the numbers say:
+
+- **Counts:** it knows it can't know them and declines (honest, but no help). Its one right "data" answer is a ranking it could guess (Streets and Sanitation handles the most requests).
+- **City code:** it knows much of the Residential Landlord and Tenant Ordinance from training (20/27), but gets section numbers wrong (heat under 5-12-110(f); five answers cite chapter 13-196, replaced by 14X) and some rules wrong (security deposit back "within 7 days"; the ordinance says 45).
+- **Budget:** the proposed 2027 budget is newer than what it learned; it answers anyway, every amount wrong (Fire Department $835.5 million vs. $914.4 million proposed).
+
+### Fair-scoring check
+
+Each of the 17 wrong answers was read. One is a scorer false alarm: q057's "5-day written notice" is right, but the check looks for "5 days" or "five" (28.6% counting it). One "unanswerable" answer (hot water at 120°F) is probably right in substance, from the old rule 13-196-430, but cites 13-196-410 (the old heat section); it counts as answered because the loaded documents can't support it. Both are footnoted in the README. A first draft of the README said the hot-water rule "isn't there"; the reference answer showed it was, so the wording was corrected.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/plain_baseline.py` (new) | `run_plain(question, today)`: one call, no sources; returns the same `Trace` the scorer reads |
+| `evals/run_evals.py` | `--baseline plain`: uses it, drops the pipeline-only metrics and faithfulness |
+| `tests/test_evals.py` | The baseline sends no sources and gives the date |
+| `evals/results/baseline-plain-summary.json` | The metrics |
+| `README.md` | "Compared with a plain model" table and examples; the problem statement now cites the measurement |
+| `CLAUDE.md` | Day 10: the plain baseline's numbers |
+
+### Check it yourself
+
+```bash
+LLM_REQUESTS_PER_MINUTE=120 LLM_USD_PER_M_INPUT=0.25 LLM_USD_PER_M_OUTPUT=1.5 \
+  .venv/bin/python -m evals.run_evals --baseline plain --label baseline-plain   # ~2 min, ~$0.02 (free from the cache)
+```
+
+### Concepts
+
+- **Baseline:** the simplest reasonable alternative, measured the same way. Improvements over your own first version show progress; a gap over a baseline shows the design is worth its cost.
+- **Straw man:** a baseline set up to lose (no date, no permission to refuse, a weaker model). Its numbers would flatter the system and convince nobody.
+- **Closed-book vs. open-book:** a model answering from its training (closed-book) vs. from sources given at question time (open-book, i.e. RAG and tools). Closed-book can't know anything newer than its training data, like a budget proposed this fall.
+
+---
+
 ## README: the passage behind each claim
 
 **Goal:** the README describes the excerpts and the new `highlights` field.

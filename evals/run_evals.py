@@ -3,6 +3,7 @@
     .venv/bin/python -m evals.run_evals --label baseline            # all 87 questions + judge
     .venv/bin/python -m evals.run_evals --subset 10 --no-judge      # quick, no judge calls
     .venv/bin/python -m evals.run_evals --ids q005,q038 --label try
+    .venv/bin/python -m evals.run_evals --baseline plain --label baseline-plain   # no data, no documents
 
 Writes evals/results/<label>.jsonl (one line per question, every detail; not
 committed) and evals/results/<label>-summary.json (the metrics; committed).
@@ -263,6 +264,8 @@ def main() -> None:
     p.add_argument("--judge-model", default=JUDGE_MODEL)
     p.add_argument("--model", help="answer model for the whole pipeline (default: llm_model)")
     p.add_argument("--search-mode", choices=["vector", "keyword", "hybrid"])
+    p.add_argument("--baseline", choices=["plain"], help=(
+        "plain: the same model answers from memory, no SQL or documents (evals/plain_baseline.py)"))
     p.add_argument("--sql-thinking", help="thinking level for the SQL agent: minimal, low, medium, high")
     p.add_argument("--fail-under", type=float, help=(
         "exit with an error if answer checks or correct refusals fall below this share, "
@@ -290,6 +293,8 @@ def main() -> None:
 
     from app.answer import run
     from app.llm import QuotaExhausted
+    if args.baseline == "plain":
+        from evals.plain_baseline import PIPELINE_ONLY, run_plain as run
 
     qs = load_questions(Path(args.questions))
     if args.ids:
@@ -323,6 +328,9 @@ def main() -> None:
                 print(f"[{i}/{len(todo)}] {q['id']} ERROR {type(e).__name__}: {str(e)[:120]}")
                 continue
             rec = score_one(q, trace, verdict)
+            if args.baseline:
+                for key in PIPELINE_ONLY:
+                    rec.pop(key, None)
             if q["id"] in timing and not rec["llm_calls"]:
                 rec.update(timing[q["id"]], timing_from=args.timing_from)
             results[q["id"]] = rec
@@ -331,7 +339,7 @@ def main() -> None:
             marks = " ".join(k for k in ("route_ok", "sql_ok", "checks_ok", "refusal_ok", "citation_ok")
                              if k in rec and not rec[k])
             j = rec.get("judge", {})
-            print(f"[{i}/{len(todo)}] {q['id']} {rec['route']:4} {rec['latency_ms'] / 1000:5.1f}s "
+            print(f"[{i}/{len(todo)}] {q['id']} {rec.get('route', '-'):4} {rec['latency_ms'] / 1000:5.1f}s "
                   f"{'refused' if rec['refused'] else 'answered'}"
                   f"{' judge=' + j['correctness'] + ('' if j['faithful'] else ' UNFAITHFUL') if j else ''}"
                   f"{'  FAILED: ' + marks if marks else ''}", flush=True)
@@ -361,6 +369,7 @@ def main() -> None:
     summary["model"] = s.llm_model
     summary["search_mode"], summary["sql_thinking_level"] = s.search_mode, s.sql_thinking_level
     summary["judge_model"] = None if args.no_judge else args.judge_model
+    summary["baseline"] = args.baseline
     summary["all"] = summarize(recs)
     unseen = [r for r in recs if "seen-in-tuning" not in r["tags"]]
     if len(unseen) < len(recs):
@@ -369,6 +378,11 @@ def main() -> None:
         sub = [r for r in recs if r["route_expected"] == kind and r["answerable"]]
         if sub:
             summary[f"route_{kind}"] = summarize(sub)
+    if args.baseline:
+        # With no sources, every claim is "unsupported": faithfulness doesn't apply
+        for part in summary.values():
+            if isinstance(part, dict):
+                part.pop("faithfulness", None)
     (RESULTS / f"{args.label}-summary.json").write_text(json.dumps(summary, indent=2, default=str) + "\n")
     print(f"\n{args.label}: {len(recs)} questions, {len(errors)} errors, {summary['minutes']} min\n{fmt(summary['all'])}")
     print(f"\nDetails: {out}\nSummary: {RESULTS / (args.label + '-summary.json')}")

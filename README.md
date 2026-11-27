@@ -9,7 +9,7 @@ Ask questions about Chicago in plain English and get answers that **cite their s
 
 ## The problem
 
-Chicago publishes millions of records and thousands of pages of code and budget, but answering "how many heat violations were there last winter, and what heat must my landlord provide?" means a SQL query on one site and a legal text on another. A plain chatbot answers confidently and often wrongly. This project answers from the real data and documents, shows exactly which query or section each claim came from, and refuses when the sources don't support an answer.
+Chicago publishes millions of records and thousands of pages of code and budget, but answering "how many heat violations were there last winter, and what heat must my landlord provide?" means a SQL query on one site and a legal text on another. A plain chatbot can't count records it has never seen, and on the rest it often answers confidently and wrongly: the same model without the data and documents got 27% of these questions right, and 17 of the 38 answers it did give were wrong ([comparison](#compared-with-a-plain-model)). This project answers from the real data and documents, shows exactly which query or section each claim came from, and refuses when the sources don't support an answer.
 
 ## Results
 
@@ -27,6 +27,34 @@ Measured on 87 hand-built questions with answers computed from the data (`evals/
 | Cost per question | | $0.003 | $0.003 |
 
 \* The one miss is a scorer false alarm (a month returned as a date instead of a name; the answer is right). The 87 questions were also used to find failures, so the held-out set is the fairer number, though small. Full tables, the experiments and the judge's hand check are [below](#evaluation).
+
+### Compared with a plain model
+
+The same model (`gemini-3.1-flash-lite`) on the same 87 questions, answering from what it knows: no SQL, no documents, no search (`evals/plain_baseline.py`). To keep it fair it gets today's date, the same answer rules, and permission to say it doesn't know, which counts as a refusal rather than a wrong answer.
+
+| | Plain model | This system |
+| --- | --- | --- |
+| Answer correctness (deterministic checks) | **27.3%** (21/77)† | **100%** (77/77) |
+| Questions about the data tables (counts, rankings, averages) | 3% (1/33): declines 32 | 100% |
+| City code questions | 74% (20/27) | 100% |
+| 2027 budget questions | 0% (0/7): 7 wrong amounts | 100% |
+| Questions needing both | 0% (0/10) | 100% |
+| Wrong answers (answered, not refused) | 17 of its 38 answers | 0 |
+| Unanswerable questions answered anyway‡ | 3/10 | 0/10 |
+| Latency p50 / cost per question | 0.8 s / $0.00015 | 2.3 s / $0.003 |
+
+† One more is right but missed by the scorer ("5-day notice"): 28.6%. The judge agrees on the picture: 24.7% correct.
+
+‡ Unanswerable from the data and documents loaded here. Of the three, the hot-water temperature (120°F) is probably right in substance, under the wrong section; the 2022 permit count comes with no source to check it against.
+
+The plain model is honest about counts it can't know, but where it answers, it's often wrong in ways a reader can't spot:
+
+- **Section numbers:** for the heat rule it names 5-12-110(f) (the rule is 14X-8-802.2.2), and five answers cite the old chapter 13-196 that the 14X code replaced, e.g. hot water under 13-196-410 (the old *heat* section; hot water was 13-196-430).
+- **Security deposits:** "within 7 days after you move out"; the ordinance says 45 days (5-12-080).
+- **The budget:** all 7 amounts wrong, e.g. the Fire Department at $835,500,000 (proposed: $914,383,396) and Public Health at $845,500,000 (proposed: $333,468,767).
+- **A question it should have refused:** "44,858 building permits in 2022" (the data loaded here starts in 2025).
+
+The pipeline costs about 20 times more per question and takes about 1.5 s longer. In exchange, its answers are right and checkable.
 
 ## How it works
 

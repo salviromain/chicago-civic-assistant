@@ -121,3 +121,21 @@ def test_ci_gate():
     assert any("errored" in p for p in gate({**good, "questions": 9}, 10, 1, 0.8))
     assert any("quota" in p for p in gate({**good, "questions": 6}, 10, 0, 0.8))  # stopped early
     assert gate({**good, "correct_refusals": None}, 10, 0, 0.8) == []  # no unanswerable question in the set
+
+
+def test_plain_baseline_answers_from_memory_with_no_sources():
+    from types import SimpleNamespace
+
+    from app.answer import AnswerDraft
+    from evals.plain_baseline import run_plain
+    prompts = []
+
+    def generate(prompt, **kw):
+        prompts.append((prompt, kw["system"]))
+        return SimpleNamespace(parsed=AnswerDraft(answer="About 900 complaints.", refused=False),
+                               cached=False, input_tokens=100, output_tokens=10, thinking_tokens=0)
+    import datetime as dt
+    t = run_plain("How many?", dt.date(2026, 11, 25), generate=generate)
+    assert t.response.answer == "About 900 complaints." and t.response.citations == [] and not t.response.refused
+    assert t.chunks == [] and t.sql is None and t.llm_calls == 1
+    assert "Today is 2026-11-25" in prompts[0][0] and "no tools and no documents" in prompts[0][1]
