@@ -4,6 +4,31 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (6): CI's eval uses the paid key
+
+**Goal:** a CI eval that reflects the code, not the free tier's load.
+
+The free tier timed out in all three places it was tried (the live service, the dry run, the first CI run). The GitHub secret `GEMINI_API_KEY` now holds the paid development key, and the job allows 60 calls a minute instead of 8. Cost: 10 questions × ~$0.004 = **about $0.04 a run**, one run per pull request (plus manual runs). The demo on Cloud Run keeps the free key: its daily limit lives in memory and resets when the instance restarts, so it isn't a hard cap on spending.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `.github/workflows/ci.yml` | `LLM_REQUESTS_PER_MINUTE: 60`; comment: paid key, cost |
+| GitHub secret `GEMINI_API_KEY` | The paid key (set from `.env` with `gh secret set`, never printed) |
+
+### Check it yourself
+
+```bash
+gh workflow run CI && gh run watch
+```
+
+### Concepts
+
+- **Cost of a check vs. its value:** a 4-cent run per pull request is cheap next to a broken answer reaching the live service; a full 87-question eval (~$0.30) stays a manual step.
+
+---
+
 ## Day 13 (5): the first CI eval failed on Google's 504s: errored questions now get one retry
 
 **Goal:** make the CI eval fail for problems in this system, not for a moment when the free tier is overloaded.

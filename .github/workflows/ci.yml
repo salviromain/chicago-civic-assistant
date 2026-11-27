@@ -20,8 +20,9 @@ jobs:
 
   # A small live eval on every pull request (Day 13): 10 questions across the three
   # routes, the main data traps and two refusals, against the Neon database as
-  # civic_reader. No judge; about 25 Gemini calls on the free demo key, ~4 minutes.
-  # Fails if answer checks or refusals drop below 80%, or a question errors.
+  # civic_reader. No judge; about 25 Gemini calls on the paid key (~$0.04 a run; the
+  # free tier timed out too often). Fails if answer checks or refusals drop below 80%,
+  # or a question errors twice.
   eval:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     needs: test
@@ -30,6 +31,7 @@ jobs:
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       READONLY_DATABASE_URL: ${{ secrets.READONLY_DATABASE_URL }}
+      LLM_REQUESTS_PER_MINUTE: "60"  # paid tier: no need for the free tier's 8 a minute
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
