@@ -50,6 +50,18 @@ docker compose up -d db
 docker compose up --build api              # http://localhost:8000/docs
 ```
 
+## Deployment
+
+Live at `https://civic-api-408605137306.us-east5.run.app` (`/docs` for the API page; `/query` needs an API key).
+
+| Piece | Where |
+| --- | --- |
+| API | Cloud Run, `us-east5` (Ohio), one instance, scales to zero (`scripts/deploy.sh`) |
+| Database | Neon free plan, `aws-us-east-2` (Ohio), copied from the local one by `scripts/setup_neon.py`; the API connects as the read-only `civic_reader` |
+| Secrets | Google Secret Manager: Gemini key, the service's API key, the read-only database URL; read at startup, never in the image |
+| Gemini | The demo uses a free-tier key from a project with billing off, so strangers can't spend money; development uses a paid key |
+| CI | GitHub Actions: tests on every push; on pull requests, a live 10-question eval against Neon that fails below 80% |
+
 ## Evaluation
 
 87 eval questions (`evals/questions.jsonl`: 33 table, 34 document, 10 both, 10 unanswerable), with answers computed from the data and the documents (`evals/build_questions.py`), plus 15 **held-out** questions (`evals/questions_holdout.jsonl`) written before the Day 11 fixes and scored once at the end. Run with `python -m evals.run_evals --label <name>`.

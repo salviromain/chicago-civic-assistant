@@ -4,6 +4,32 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 13 (4/4 so far): README and CLAUDE.md describe the deployment
+
+**Goal:** record where everything runs and what's left of Day 13.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `README.md` | New "Deployment" section: live URL, Cloud Run, Neon, Secret Manager, free-tier demo key, CI |
+| `CLAUDE.md` | Day 13 status, project and secret names; Neon is the production database while `DATABASE_URL` stays local |
+
+### Left
+
+- Add the GitHub secrets `GEMINI_API_KEY` (demo key) and `READONLY_DATABASE_URL`, then run the CI eval once.
+- Decide whether the demo keeps the free key (slow at times, $0) or uses the paid one (fast, a small capped cost).
+
+### Check it yourself
+
+Read the "Deployment" section of `README.md`.
+
+### Concepts
+
+- **Production vs. development configuration:** the same code, different settings per place (local database and paid key on the Mac; Neon and the free key on Cloud Run), all from environment variables.
+
+---
+
 ## Day 13 (3/4): CI runs a small live eval on every pull request
 
 **Goal:** catch a change that breaks answers before it's merged, not only one that breaks the unit tests.
