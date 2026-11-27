@@ -35,6 +35,20 @@ from app.schemas import ErrorResponse, HealthResponse, QueryRequest, QueryRespon
 
 log = logs.setup()
 limiter = RateLimiter()
+# Wrong API keys, counted separately: past 10 a minute (or 100 a day) from one client,
+# the answer is 429 instead of 401, so nobody can try keys at speed
+auth_failures = RateLimiter()
+MAX_BODY_BYTES = 16_384  # a question is at most 1,000 characters; nothing needs more
+# Sent with every response. HSTS: browsers use only HTTPS for this host for a year.
+# nosniff: a JSON answer is never run as a script. DENY: no other site can frame a page.
+# no-store: answers and errors aren't kept in shared caches.
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+}
 # Logs show a client as a short hash, not its IP address. The salt is new at every
 # start, so the hash links one client's requests without being reversible to an IP.
 _SALT = os.urandom(16)
@@ -77,13 +91,40 @@ async def log_queries(request: Request, call_next):
             log.log(logs.level_for(status_code), "query", extra={"fields": fields})
 
 
+@app.middleware("http")
+async def security(request: Request, call_next):
+    """Refuse oversized bodies before reading them; add the security headers."""
+    from fastapi.responses import JSONResponse
+    if request.method == "POST":
+        length = request.headers.get("content-length")
+        if length is None or not length.isdigit():
+            response = JSONResponse({"detail": "A Content-Length header is required."}, status_code=411)
+        elif int(length) > MAX_BODY_BYTES:
+            response = JSONResponse({"detail": f"The request body is limited to {MAX_BODY_BYTES:,} bytes."},
+                                    status_code=413)
+        else:
+            response = await call_next(request)
+    else:
+        response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 def require_api_key(
+    request: Request,
     x_api_key: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
 ) -> None:
     # compare_digest takes the same time whether the first or last character differs,
     # so the key can't be guessed one character at a time by timing responses
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.service_api_key):
+        client = client_address(request.client.host if request.client else None,
+                                request.headers.get("x-forwarded-for"), settings.trusted_proxies)
+        request.state.client = client
+        if auth_failures.check(client, per_minute=10, per_day=100, total_per_day=0):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many wrong API keys. Try again later.",
+                                headers={"Retry-After": "60"})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing or invalid X-API-Key")
 
 
@@ -101,7 +142,19 @@ def rate_limit(request: Request, settings: Settings = Depends(get_settings)) -> 
                             headers={"Retry-After": str(limited.retry_after_s)})
 
 
+_health = {"checked": 0.0, "ok": False}
+
+
 def database_ok() -> bool:
+    """Is the database reachable? Checked at most every 30 s: /health needs no key, and
+    a check on every call would let anyone keep Neon awake (and use its compute hours)."""
+    if time.monotonic() - _health["checked"] < 30:
+        return _health["ok"]
+    _health["checked"], _health["ok"] = time.monotonic(), _check_database()
+    return _health["ok"]
+
+
+def _check_database() -> bool:
     try:
         from app.db import connect_readonly
         with connect_readonly() as conn:

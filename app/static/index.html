@@ -162,7 +162,9 @@
       box.append(el("h2", {}, "Sources"));
       const ol = el("ol", { class: "sources" });
       d.citations.forEach((c, i) => {
-        const name = c.url ? el("a", { href: c.url, target: "_blank", rel: "noopener" }, c.source) : c.source;
+        // Only web links become clickable (never javascript: or data: URLs)
+        const safe = typeof c.url === "string" && /^https?:\/\//i.test(c.url);
+        const name = safe ? el("a", { href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.source) : c.source;
         const li = el("li", { id: "src-" + (i + 1) }, el("div", { class: "src" }, name));
         if (c.snippet) {
           const isSql = /^\s*(SELECT|WITH)\b/i.test(c.snippet);

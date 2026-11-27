@@ -4,6 +4,41 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Security pass (3/4): the API refuses big bodies and key guessing, sends security headers, and spares Neon
+
+**Goal:** close the gaps found in the API's attack surface.
+
+| Gap | Fix |
+| --- | --- |
+| A request body could be up to 32 MB (Cloud Run's limit); a few at once could exhaust the 512 MB instance | Bodies over 16 KB get **413** before being read; a POST without `Content-Length` gets **411** |
+| Wrong API keys were unlimited | Past 10 wrong keys a minute (or 100 a day) from one client: **429** instead of 401. The right key still works. (The key is 256 random bits, so guessing it is hopeless anyway; this stops the noise and the cost.) |
+| Only the page had security headers | Every response: `Strict-Transport-Security` (HTTPS only, a year), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` |
+| `/health` (no key needed) queried the database on every call: pinging it all day would keep Neon awake and use the free plan's compute hours | The database check runs at most every 30 s |
+| The page made any citation URL a link | Only `http(s)://` URLs become links (never `javascript:`), with `noopener noreferrer` |
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/main.py` | `security` middleware (body size, headers); `auth_failures` limiter; cached `database_ok()` |
+| `app/static/index.html` | Web links only |
+| `tests/test_api.py` | 413; headers on every response; key guessing → 429; health checked once in 30 s |
+
+### Check it yourself
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://civic-api-408605137306.us-east5.run.app/query \
+  -H "Content-Type: application/json" --data-binary @<(head -c 20000 /dev/zero | tr '\0' 'x')   # 413
+curl -sI https://civic-api-408605137306.us-east5.run.app/health | grep -i -E "strict|nosniff|frame"
+```
+
+### Concepts
+
+- **HSTS:** tells browsers to use only HTTPS for this site, so a network attacker can't downgrade a visit to plain HTTP.
+- **Resource exhaustion (DoS):** making a service spend its memory, CPU or quotas; limits on size, rate and work are the defense.
+
+---
+
 ## Security pass (2/4): civic_reader is read-only by itself, without temp tables
 
 **Goal:** a second line behind the guard: even if a query got past it, or our code forgot its READ ONLY transaction, the database role alone must refuse to change anything.

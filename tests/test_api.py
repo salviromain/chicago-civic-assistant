@@ -26,6 +26,8 @@ def settings():
         main.app.dependency_overrides[get_settings] = lambda: Settings(service_api_key="test-key", **overrides)
     use()
     main.limiter.reset()  # every test client has the same address: start each test with no history
+    main.auth_failures.reset()
+    main._health.update(checked=0.0, ok=False)
     yield use
     main.app.dependency_overrides.clear()
 
@@ -200,3 +202,29 @@ def test_the_page_is_served_with_a_strict_content_policy():
     assert "connect-src 'self'" in r.headers["Content-Security-Policy"]
     # Nothing from the server is inserted as HTML: answers and sources go in as text
     assert "innerHTML" not in r.text
+
+
+def test_oversized_bodies_are_refused_before_reading(pipeline):
+    r = client.post("/query", content=b'{"question": "' + b"x" * 20_000 + b'"}',
+                    headers={**KEY, "Content-Type": "application/json"})
+    assert r.status_code == 413 and "16,384 bytes" in r.json()["detail"]
+
+
+def test_every_response_has_the_security_headers(pipeline):
+    for r in (client.get("/health"), ask(), ask(headers={})):
+        assert r.headers["Strict-Transport-Security"].startswith("max-age=")
+        assert r.headers["X-Content-Type-Options"] == "nosniff" and r.headers["X-Frame-Options"] == "DENY"
+        assert r.headers["Cache-Control"] == "no-store"
+
+
+def test_guessing_keys_gets_a_429(pipeline):
+    codes = [ask(headers={"X-API-Key": f"guess-{i}"}).status_code for i in range(12)]
+    assert codes[:10] == [401] * 10 and codes[10:] == [429, 429]
+    assert ask().status_code == 200  # the right key still works
+
+
+def test_health_checks_the_database_at_most_every_30_s(monkeypatch):
+    calls = []
+    monkeypatch.setattr(main, "_check_database", lambda: calls.append(1) or True)
+    assert [client.get("/health").json()["database"] for _ in range(5)] == ["ok"] * 5
+    assert len(calls) == 1
