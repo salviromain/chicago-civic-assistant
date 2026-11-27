@@ -4,6 +4,43 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Security pass (2/4): civic_reader is read-only by itself, without temp tables
+
+**Goal:** a second line behind the guard: even if a query got past it, or our code forgot its READ ONLY transaction, the database role alone must refuse to change anything.
+
+### Found on Neon
+
+`civic_reader` could read only the four tables (good), but it could still create **temporary tables** (Postgres gives every role that right by default), had no connection limit, and was read-only only because `app/db.py` opens READ ONLY transactions.
+
+### The fix (Neon and local)
+
+- `default_transaction_read_only = on` for the role: every transaction it opens is read-only unless it explicitly asks otherwise, which the guard doesn't allow.
+- `REVOKE TEMPORARY ... FROM PUBLIC`: no temporary tables.
+- `CONNECTION LIMIT 20`.
+
+Applied to Neon with `scripts/setup_neon.py --harden` (same password, no copy) and locally; in `db/init.sql` for new local databases. Verified as civic_reader: `CREATE TABLE` now fails with "cannot execute CREATE TABLE in a read-only transaction"; `SHOW default_transaction_read_only` is `on`; no TEMP privilege. The `--check` mode now tests both.
+
+Also checked: the Neon owner password that appeared in the chat on Day 13 is rejected (it was rotated).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `scripts/setup_neon.py` | Role limits in the setup; `--harden`; `--check` tests read-only and temp |
+| `db/init.sql` | Same limits locally |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -m scripts.setup_neon --check
+```
+
+### Concepts
+
+- **Defense in depth:** independent layers (the parser, the code's READ ONLY transaction, the role's own settings, its privileges), so one mistake isn't enough to cause harm.
+
+---
+
 ## Security pass (1/4): the SQL guard allow-lists functions instead of deny-listing them
 
 **Goal:** close the gaps found by running 32 hostile queries through `app/sql_guard.py`.

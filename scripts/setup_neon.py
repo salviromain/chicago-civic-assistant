@@ -83,10 +83,30 @@ def create_reader(url: str) -> str:
                      "GRANT USAGE ON SCHEMA public TO civic_reader",
                      "GRANT SELECT ON ALL TABLES IN SCHEMA public TO civic_reader",
                      "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO civic_reader",
-                     "ALTER ROLE civic_reader SET statement_timeout = '15s'"):
+                     "ALTER ROLE civic_reader SET statement_timeout = '15s'",
+                     # Defense in depth: read-only even outside our READ ONLY transactions,
+                     # no temporary tables (PUBLIC has TEMP by default), at most 20 connections
+                     "ALTER ROLE civic_reader SET default_transaction_read_only = on",
+                     "ALTER ROLE civic_reader CONNECTION LIMIT 20",
+                     f'REVOKE TEMPORARY ON DATABASE "{dbname}" FROM PUBLIC'):
             conn.execute(stmt)
-    print(f"civic_reader {'password reset' if exists else 'created'}, SELECT only, 15 s timeout")
+    print(f"civic_reader {'password reset' if exists else 'created'}: SELECT only, read-only, "
+          "no temp tables, 20 connections, 15 s timeout")
     return reader_url(url, password)
+
+
+def harden(url: str) -> None:
+    """The role's limits, without touching its password or the data."""
+    import psycopg
+    dbname = urlsplit(url).path.lstrip("/")
+    with psycopg.connect(url, autocommit=True) as conn:
+        for stmt in ("ALTER ROLE civic_reader SET statement_timeout = '15s'",
+                     "ALTER ROLE civic_reader SET default_transaction_read_only = on",
+                     "ALTER ROLE civic_reader CONNECTION LIMIT 20",
+                     f'REVOKE TEMPORARY ON DATABASE "{dbname}" FROM PUBLIC',
+                     "REVOKE CREATE ON SCHEMA public FROM PUBLIC"):
+            conn.execute(stmt)
+    print("civic_reader: read-only by default, no temp tables, 20 connections, 15 s timeout")
 
 
 def store_secret(value: str) -> None:
@@ -117,9 +137,13 @@ def compare(neon_reader: str) -> bool:
             neon.execute("CREATE TABLE should_fail (x int)")
             ok = False
             print("civic_reader could create a table: NOT read-only")
-        except psycopg.errors.InsufficientPrivilege:
+        except (psycopg.errors.InsufficientPrivilege, psycopg.errors.ReadOnlySqlTransaction):
             neon.rollback()  # the failed statement aborts the transaction
             print(f"connected as {user}: writes are refused (read-only)")
+        ro = neon.execute("SHOW default_transaction_read_only").fetchone()[0]
+        temp = neon.execute("SELECT has_database_privilege(current_database(), 'TEMP')").fetchone()[0]
+        ok &= ro == "on" and not temp
+        print(f"read-only by default: {ro}; can create temp tables: {temp}")
         size = neon.execute("SELECT pg_size_pretty(pg_database_size(current_database()))").fetchone()[0]
         print(f"Neon database size: {size} (free plan: 1 GB)")
     return ok
@@ -128,8 +152,11 @@ def compare(neon_reader: str) -> bool:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--check", action="store_true", help="only compare row counts")
+    p.add_argument("--harden", action="store_true", help="only apply the role's limits (no copy, same password)")
     args = p.parse_args()
-    if not args.check:
+    if args.harden:
+        harden(neon_url())
+    elif not args.check:
         url = neon_url()
         copy_database(url)
         store_secret(create_reader(url))
