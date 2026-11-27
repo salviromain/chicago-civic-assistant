@@ -4,6 +4,53 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Security pass (4/4): the Mac, GitHub and Google Cloud
+
+**Goal:** the defenses around the code.
+
+### This Mac
+
+- The local Postgres listened on **all network interfaces** (`0.0.0.0:5432`) with the password `postgres`: anyone on the same Wi-Fi could log in as superuser. `docker-compose.yml` now publishes 5432 and 8000 on `127.0.0.1` only.
+- `.env` was readable by every user account on the Mac (`-rw-r--r--`); now `-rw-------` (owner only).
+
+### GitHub
+
+- The workflow's token: `permissions: contents: read` (it can read the code, nothing else).
+- Actions **pinned to commit ids** (`actions/checkout@3d3c42e…  # v7.0.1`): a tag can be moved to other code, a commit id can't. This blocks a **supply-chain attack** through a hijacked action.
+- **Dependabot** alerts and security fixes on; `.github/dependabot.yml` checks pip packages, actions and the Docker base image weekly. (Dependabot's pull requests don't get the repository's secrets, so their eval job skips.)
+- `main` protected: no force-push, no deletion, for admins too.
+- Already on: secret scanning and push protection (GitHub refuses a push containing a known key format). The whole git history was scanned for key, password and token patterns: nothing.
+- `pip-audit` on `requirements.txt` and `requirements-dev.txt`: no known vulnerabilities.
+
+### Google Cloud
+
+- Google's default compute service account had **Editor** (broad write access to the project). Nothing of ours runs as it (Cloud Run: `civic-api`; builds: `civic-build`); the role is removed.
+- Both Gemini keys are restricted to the Gemini API only (checked).
+- The demo key pasted in the chat on Day 13 is deleted (Google rejects it).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `docker-compose.yml` | Ports on 127.0.0.1 |
+| `.github/workflows/ci.yml` | Token read-only; actions pinned |
+| `.github/dependabot.yml` | New |
+| (settings) | `.env` 600; Dependabot on; `main` protected; Editor removed from the default compute account |
+
+### Check it yourself
+
+```bash
+docker compose ps --format "{{.Ports}}"            # 127.0.0.1:5432->5432/tcp
+gh api repos/salviromain/chicago-civic-assistant/branches/main/protection --jq .allow_force_pushes.enabled   # false
+```
+
+### Concepts
+
+- **Supply-chain attack:** compromising something you depend on (a package, a CI action) instead of your own code. Pinning exact versions and auditing them is the defense.
+- **Least privilege, for accounts:** a broad default role that nothing needs is a risk with no benefit.
+
+---
+
 ## Security pass (3/4): the API refuses big bodies and key guessing, sends security headers, and spares Neon
 
 **Goal:** close the gaps found in the API's attack surface.

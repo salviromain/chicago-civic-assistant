@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: civic
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"   # this Mac only: not reachable from the network
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -22,7 +22,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/civic
       READONLY_DATABASE_URL: postgresql://civic_reader:change-me@db:5432/civic
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
