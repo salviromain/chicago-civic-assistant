@@ -1,0 +1,262 @@
+{
+  "label": "day11-ties",
+  "date": "2026-11-27",
+  "minutes": 0.1,
+  "errors": [],
+  "model": "gemini-3.1-flash-lite",
+  "search_mode": "vector",
+  "sql_thinking_level": null,
+  "judge_model": "gemini-3.5-flash-lite",
+  "all": {
+    "questions": 87,
+    "router_accuracy": [
+      1.0,
+      87
+    ],
+    "sql_execution": [
+      0.9767441860465116,
+      43
+    ],
+    "recall@5": [
+      1.0,
+      44
+    ],
+    "mrr": [
+      0.8598484848484849,
+      44
+    ],
+    "answer_checks": [
+      1.0,
+      77
+    ],
+    "correct_refusals": [
+      1.0,
+      10
+    ],
+    "false_refusals": [
+      0.0,
+      77
+    ],
+    "citation_accuracy": [
+      1.0,
+      77
+    ],
+    "faithfulness": [
+      1.0,
+      77
+    ],
+    "correctness_judge": [
+      0.987012987012987,
+      77
+    ],
+    "correct_or_partial_judge": [
+      1.0,
+      77
+    ],
+    "latency_p50_s": 0.85,
+    "latency_p95_s": 2.06,
+    "latency_p50_s_no_pacing": 0.85,
+    "latency_p95_s_no_pacing": 2.06,
+    "latency_measured_on": 87,
+    "tokens_per_question": 10369,
+    "cost_per_question_usd": 0.002945
+  },
+  "without_seen_in_tuning": {
+    "questions": 83,
+    "router_accuracy": [
+      1.0,
+      83
+    ],
+    "sql_execution": [
+      0.9767441860465116,
+      43
+    ],
+    "recall@5": [
+      1.0,
+      42
+    ],
+    "mrr": [
+      0.8531746031746033,
+      42
+    ],
+    "answer_checks": [
+      1.0,
+      75
+    ],
+    "correct_refusals": [
+      1.0,
+      8
+    ],
+    "false_refusals": [
+      0.0,
+      75
+    ],
+    "citation_accuracy": [
+      1.0,
+      75
+    ],
+    "faithfulness": [
+      1.0,
+      75
+    ],
+    "correctness_judge": [
+      0.9866666666666667,
+      75
+    ],
+    "correct_or_partial_judge": [
+      1.0,
+      75
+    ],
+    "latency_p50_s": 0.85,
+    "latency_p95_s": 2.06,
+    "latency_p50_s_no_pacing": 0.85,
+    "latency_p95_s_no_pacing": 2.06,
+    "latency_measured_on": 83,
+    "tokens_per_question": 10519,
+    "cost_per_question_usd": 0.002989
+  },
+  "route_sql": {
+    "questions": 33,
+    "router_accuracy": [
+      1.0,
+      33
+    ],
+    "sql_execution": [
+      0.9696969696969697,
+      33
+    ],
+    "recall@5": null,
+    "mrr": null,
+    "answer_checks": [
+      1.0,
+      33
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      33
+    ],
+    "citation_accuracy": [
+      1.0,
+      33
+    ],
+    "faithfulness": [
+      1.0,
+      33
+    ],
+    "correctness_judge": [
+      1.0,
+      33
+    ],
+    "correct_or_partial_judge": [
+      1.0,
+      33
+    ],
+    "latency_p50_s": 0.8,
+    "latency_p95_s": 3.24,
+    "latency_p50_s_no_pacing": 0.8,
+    "latency_p95_s_no_pacing": 3.24,
+    "latency_measured_on": 33,
+    "tokens_per_question": 14835,
+    "cost_per_question_usd": 0.004203
+  },
+  "route_docs": {
+    "questions": 34,
+    "router_accuracy": [
+      1.0,
+      34
+    ],
+    "sql_execution": null,
+    "recall@5": [
+      1.0,
+      34
+    ],
+    "mrr": [
+      0.8774509803921569,
+      34
+    ],
+    "answer_checks": [
+      1.0,
+      34
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      34
+    ],
+    "citation_accuracy": [
+      1.0,
+      34
+    ],
+    "faithfulness": [
+      1.0,
+      34
+    ],
+    "correctness_judge": [
+      0.9705882352941176,
+      34
+    ],
+    "correct_or_partial_judge": [
+      1.0,
+      34
+    ],
+    "latency_p50_s": 0.87,
+    "latency_p95_s": 1.14,
+    "latency_p50_s_no_pacing": 0.87,
+    "latency_p95_s_no_pacing": 1.14,
+    "latency_measured_on": 34,
+    "tokens_per_question": 3720,
+    "cost_per_question_usd": 0.001101
+  },
+  "route_both": {
+    "questions": 10,
+    "router_accuracy": [
+      1.0,
+      10
+    ],
+    "sql_execution": [
+      1.0,
+      10
+    ],
+    "recall@5": [
+      1.0,
+      10
+    ],
+    "mrr": [
+      0.8,
+      10
+    ],
+    "answer_checks": [
+      1.0,
+      10
+    ],
+    "correct_refusals": null,
+    "false_refusals": [
+      0.0,
+      10
+    ],
+    "citation_accuracy": [
+      1.0,
+      10
+    ],
+    "faithfulness": [
+      1.0,
+      10
+    ],
+    "correctness_judge": [
+      1.0,
+      10
+    ],
+    "correct_or_partial_judge": [
+      1.0,
+      10
+    ],
+    "latency_p50_s": 1.04,
+    "latency_p95_s": 1.25,
+    "latency_p50_s_no_pacing": 1.04,
+    "latency_p95_s_no_pacing": 1.25,
+    "latency_measured_on": 10,
+    "tokens_per_question": 18761,
+    "cost_per_question_usd": 0.00532
+  }
+}

@@ -1,6 +1,6 @@
 # Chicago Civic Data Assistant
 
-Ask questions about Chicago in plain English. The service decides whether to answer from **city data tables** (Text-to-SQL over the Chicago Data Portal) or from **city documents** (hybrid RAG over the Municipal Code and budget PDFs), or both, and always cites its sources.
+Ask questions about Chicago in plain English. The service decides whether to answer from **city data tables** (Text-to-SQL over the Chicago Data Portal) or from **city documents** (RAG over the Municipal Code and budget PDFs), or both, and always cites its sources.
 
 > 🚧 Work in progress: 2-week build, started November 2026.
 
@@ -9,9 +9,9 @@ Ask questions about Chicago in plain English. The service decides whether to ans
 ```
 question ─► FastAPI /query ─► Router (LLM): SQL, documents, or both?
                                  │                      │
-                         SQL agent (read-only)   Hybrid search (pgvector + BM25, RRF)
+                         SQL agent (read-only)   Vector search (pgvector) + section lookup
                                  │                      │
-                         Postgres tables          top 5 chunks (reranker: optional)
+                         Postgres tables          top 5 chunks (BM25, RRF, reranker: optional)
                                  └──────► LLM writes a cited answer ◄──┘
 ```
 
@@ -45,28 +45,33 @@ The response has the `answer` (with `[1]`, `[2]` markers), the `route` (sql, doc
 
 ## Evaluation
 
-87 held-out questions (`evals/questions.jsonl`: 33 table, 34 document, 10 both, 10 unanswerable), with answers computed from the data and the documents (`evals/build_questions.py`). Run with `python -m evals.run_evals --label <name>`.
+87 eval questions (`evals/questions.jsonl`: 33 table, 34 document, 10 both, 10 unanswerable), with answers computed from the data and the documents (`evals/build_questions.py`), plus 15 **held-out** questions (`evals/questions_holdout.jsonl`) written before the Day 11 fixes and scored once at the end. Run with `python -m evals.run_evals --label <name>`.
 
-**Baseline** (2026-11-26, `gemini-3.1-flash-lite`, judge `gemini-3.5-flash-lite`):
+Answer model `gemini-3.1-flash-lite`, judge `gemini-3.5-flash-lite`:
 
-| Metric | Result | Target |
-| --- | --- | --- |
-| Router accuracy | 100% (87/87) | 90%+ |
-| SQL execution accuracy | 79.1% (34/43) | 85%+ |
-| Recall@5 / MRR | 97.7% / 0.76 | 80%+ / 0.6+ |
-| Answer correctness (checks) | 84.4% (65/77) | 80%+ |
-| Answer correctness (LLM judge) | 89.6% | |
-| Faithfulness (LLM judge) | 100% (77/77) | 90%+ |
-| Citation accuracy | 98.7% | 90%+ |
-| Correct refusals / false refusals | 100% (10/10) / 0% | 90%+ |
-| Latency p50 / p95 | 16.7 s / 70.2 s (Gemini overloaded that day) | p95 under ~8 s |
-| Cost per question | $0 (free tier), ~8,600 tokens | reported |
+| Metric | Baseline (Day 9) | After Day 11 fixes | Held-out (15, scored once) | Target |
+| --- | --- | --- | --- | --- |
+| Router accuracy | 100% (87/87) | 100% | 100% (15/15) | 90%+ |
+| SQL execution accuracy | 79.1% (34/43) | 97.7% (42/43)* | 100% (9/9) | 85%+ |
+| Recall@5 / MRR | 97.7% / 0.76 | 100% / 0.86 | 100% / 0.71 | 80%+ / 0.6+ |
+| Answer correctness (checks) | 84.4% (65/77) | 100% (77/77) | 100% (13/13) | 80%+ |
+| Answer correctness (LLM judge) | 89.6% | 98.7% | 100% | |
+| Faithfulness (LLM judge) | 100% (77/77) | 100% | 100% | 90%+ |
+| Citation accuracy | 98.7% | 100% | 100% | 90%+ |
+| Correct refusals / false refusals | 100% (10/10) / 0% | 100% / 0% | 100% (2/2) / 0% | 90%+ |
+| Latency p50 / p95, every call live | 16.7 s / 70.2 s (free tier, overloaded) | 2.3 s / 4.1 s (paid tier) | 2.7 s / 4.5 s | p95 under ~8 s |
+| Cost per question | $0 (free tier) | $0.0029 (~10,400 tokens) | $0.0030 | reported |
 
-The judge agreed with a hand check on 18 of 20 correctness verdicts and 20 of 20 faithfulness verdicts, and caught 3 of 3 planted false claims. It is too lenient on near-miss numbers, so the table's correctness figure comes from deterministic checks.
+\* The one miss (q012) is a scorer false alarm: the answer is right, but the query returns the month as a date and the reference as a name.
+
+**Read with care:** the 87 questions were used to find and fix failures from Day 9 on, so "after Day 11" partly measures fitting to them. The held-out set is the honest check, but 15 questions is small, and the same person wrote the questions and the fixes. Costs use the list prices of $0.25 / $1.50 per million input / output tokens.
+
+The judge agreed with a hand check on 18 of 20 correctness verdicts and 20 of 20 faithfulness verdicts, and caught 3 of 3 planted false claims. It is too lenient on near-miss numbers, so the headline correctness figure comes from deterministic checks.
 
 | System | Router | SQL | Recall@5 | Faithfulness | Correct refusals |
 | --- | --- | --- | --- | --- | --- |
 | This project (first run, 2026-11-26) | 100% | 79.1% | 97.7% | 100% | 100% |
+| This project (after Day 11, 2026-11-27) | 100% | 97.7% | 100% | 100% | 100% |
 
 The planned outside comparison (Claude + [OpenGov MCP](https://github.com/srobbin/opengov-mcp-server) on the same questions) was skipped: it needs a paid Anthropic API key or a manual Claude Desktop run.
 
@@ -78,7 +83,7 @@ The planned outside comparison (Claude + [OpenGov MCP](https://github.com/srobbi
 | Vector search instead of hybrid | 79.1% | **100%** | **87.0%** | **adopted** |
 | Reranker on (retrieval only) | | 72.7%* | | rejected |
 | Fixed 500-token chunks (retrieval only) | | 95.5%* | | rejected (no gain) |
-| Answer model `gemini-3.5-flash-lite` | **93.0%** | 97.7% | **90.9%** | pending a combined run |
+| Answer model `gemini-3.5-flash-lite` | **93.0%** | 97.7% | **90.9%** | not adopted: equal after Day 11 (both 100% checks) |
 
 \* key-phrase relevance; hybrid scores 95.5% on the same measure.
 

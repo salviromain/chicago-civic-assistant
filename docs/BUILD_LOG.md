@@ -4,6 +4,81 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Day 11 (7/7): measured: the fixes, the model choice, real latency, and the held-out score
+
+**Goal:** measure the Day 11 fixes, choose the answer model, measure latency with every call live, and score the held-out set once. First runs on the **paid tier** (2026-11-27): about $0.30 per full eval run, so runs are no longer rationed.
+
+### The runs
+
+| Run | What it measures | Questions | Cost |
+| --- | --- | --- | --- |
+| `day11-fixes` | The first three Day 11 fixes | 87 | ~$0.25 |
+| `day11-ties` | + the tie and rounding fixes (4/7), re-scored after the scorer fixes (5/7) | 87 | ~$0.25 |
+| `day11-3.5-flash-lite` | Same, `gemini-3.5-flash-lite` answering, judged by `gemini-3.1-flash-lite` | 87 | ~$0.25 |
+| `latency-3.1-flash-lite`, `latency-3.5-flash-lite` | Every call live (`LLM_CACHE_DIR` = empty folder), no judge | 87 each | ~$0.25 each |
+| `holdout` | The 15 held-out questions, scored once | 15 | ~$0.05 |
+
+### Results (`gemini-3.1-flash-lite`)
+
+| Metric | Vector search (Day 10) | `day11-fixes` | `day11-ties` | Held-out |
+| --- | --- | --- | --- | --- |
+| SQL execution | 79.1% (34/43) | 97.7% | 97.7% (42/43) | 100% (9/9) |
+| Answer checks | 87.0% (67/77) | 97.4% | **100%** (77/77) | 100% (13/13) |
+| Judge correctness | 92.2% | 98.7% | 98.7% | 100% |
+| Faithfulness | 100% | 100% | 100% | 100% |
+| Citation accuracy | 100% | 100% | 100% | 100% |
+| Refusals | 9/10 | 10/10 | 10/10 | 2/2 |
+| MRR | 0.81 | 0.81 | 0.86 | 0.71 |
+
+The SQL review fixed every query it was built for: compared with the Day 10 vector-search run, 8 questions went from wrong to right (q005, q010, q018, q023, q037, q075, q078, q079) and none went the other way. The refusal rule (3/7) fixed the one missed refusal (q084, hot water temperature). MRR rose to 0.86 only because the scorer now accepts a department's own budget page (5/7), not because search changed. The one SQL miss left (q012) is a scorer false alarm (5/7). The judge's one "partial" (q054, sublets) is a stricter reading of a correct answer: the code puts the sublease rule inside the early-termination paragraph, and the answer says so.
+
+### Latency, every call live (paid tier)
+
+| Model | p50 | p95 |
+| --- | --- | --- |
+| `gemini-3.1-flash-lite` | 2.3 s | 4.1 s |
+| `gemini-3.5-flash-lite` | 2.1 s | 3.5 s |
+
+Under the ~8 s target. The Day 9 baseline's 16.7 s / 70.2 s was the free tier on an overloaded day, plus waiting for its 10-calls-a-minute limit. Each question is 2–3 calls in a row (router, then SQL and/or search in parallel, then the answer), about 0.7–1 s each.
+
+### The model: keep `gemini-3.1-flash-lite`
+
+| | 3.1-flash-lite | 3.5-flash-lite |
+| --- | --- | --- |
+| Answer checks (judged run / live run) | 100% / 100% | 100% / 98.7% (q037: wrote 8.5 for 8.449) |
+| SQL execution | 97.7% | 97.7% |
+| Faithfulness (judge) | 100% | 98.7%: a judge mistake (q039: it said "5-12-110(g)" wasn't in the sources; it is) |
+| Latency p50 / p95 | 2.3 s / 4.1 s | 2.1 s / 3.5 s |
+| Cost per question | $0.0029 | $0.0027 |
+
+Day 10's gap (93.0% vs 79.1% SQL execution) closed: the review now catches in code the mistakes 3.1 made and 3.5 didn't. With equal accuracy, 3.1 wins on steadiness, and it keeps the judge that was hand-checked on Day 9 (`gemini-3.5-flash-lite`). A judge should be a different model from the one it grades, so choosing 3.5 would mean switching to the 3.1 judge, which caught 3 of 3 planted claims but made the q039 mistake.
+
+### The held-out score
+
+15 of 15 on every metric, read by hand: every answer matches its reference, and both refusals give the right reason. This is the most honest number in the project, because these questions played no part in any fix. It's also small, and the same person wrote the questions and the fixes, so similar blind spots are possible. Day 13's CI will keep running a subset on every change.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `evals/results/*-summary.json` | The six runs above |
+| `README.md` | Results table (baseline, after Day 11, held-out); model decision; diagram shows vector search |
+| `CLAUDE.md` | Day 11 done; paid tier for development, free tier for the demo (Day 12/13) |
+
+### Check it yourself
+
+```bash
+cat evals/results/day11-ties-summary.json evals/results/holdout-summary.json
+LLM_CACHE_DIR=/tmp/fresh .venv/bin/python -m evals.run_evals --label latency-check --subset 10 --no-judge   # about 3 cents
+```
+
+### Concepts
+
+- **Held-out set:** questions kept aside while fixing, scored once at the end. The eval set measures progress; the held-out set measures whether the progress was real or just fitting to the eval questions.
+- **Judge independence:** a model grading its own answers tends to agree with itself, so the judge is a different model from the one answering.
+
+---
+
 ## Day 11 (6/7): LLM_CACHE_DIR, to time the pipeline with every call live
 
 **Goal:** measure real latency. Eval runs reuse cached replies: in `day11-ties`, the router and most SQL calls came from the cache and only the answer call was live, so its "0.85 s per question" measured one call, not the pipeline.
