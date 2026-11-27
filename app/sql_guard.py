@@ -22,17 +22,37 @@ from sqlglot.errors import SqlglotError
 
 ALLOWED_TABLES = {"service_requests_311", "building_violations", "building_permits"}
 
-# Functions that read files, sleep, change settings or reach other servers.
-# Most need privileges civic_reader doesn't have; blocking them here gives a
-# clear error instead of relying on that.
-BLOCKED_FUNCTIONS = {
-    "pg_sleep", "pg_sleep_for", "pg_sleep_until", "pg_read_file", "pg_read_binary_file",
-    "pg_ls_dir", "pg_stat_file", "lo_import", "lo_export", "lo_get", "set_config",
-    "current_setting", "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf",
-    "dblink", "dblink_exec", "query_to_xml", "pg_advisory_lock", "pg_advisory_xact_lock",
-    "nextval", "setval", "pg_notify", "txid_current", "pg_current_xact_id",
+# Functions are ALLOW-LISTED: only what counting and summarizing needs. Anything else
+# (pg_sleep, pg_read_file, dblink, inet_server_addr, version, database_to_xml,
+# generate_series, and any function nobody thought of) is refused. A deny-list only
+# blocks the dangers someone listed; an allow-list also blocks the ones nobody listed.
+# Names are as sqlglot reports them: it also treats AND/OR/CASE/IF/CAST as functions,
+# and calls date_trunc "timestamp_trunc" and to_char "time_to_str".
+ALLOWED_FUNCTIONS = {
+    # logic and types
+    "and", "or", "xor", "case", "if", "coalesce", "nullif", "cast", "try_cast", "greatest", "least",
+    # aggregates
+    "count", "sum", "avg", "min", "max", "percentile_cont", "percentile_disc", "median", "mode",
+    "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp", "corr",
+    "array_agg", "string_agg", "group_concat", "count_if", "bool_and", "bool_or", "any_value",
+    # window functions
+    "row_number", "rank", "dense_rank", "percent_rank", "cume_dist", "ntile", "lag", "lead",
+    "first_value", "last_value", "nth_value",
+    # dates
+    "extract", "timestamp_trunc", "date_trunc", "time_to_str", "to_char", "date_part", "age",
+    "make_date", "str_to_date", "str_to_time", "to_date", "to_timestamp", "date", "date_add",
+    "date_sub", "date_diff", "datediff", "timestamp_add", "timestamp_sub", "timestamp_diff",
+    "current_date", "current_timestamp", "interval",
+    # text
+    "lower", "upper", "length", "char_length", "substring", "trim", "ltrim", "rtrim", "concat",
+    "concat_ws", "replace", "split_part", "left", "right", "initcap", "str_position", "position",
+    "regexp_like", "regexp_i_like", "regexp_replace", "regexp_extract", "starts_with", "lpad", "rpad",
+    # math
+    "round", "floor", "ceil", "abs", "sign", "sqrt", "pow", "power", "ln", "log", "exp", "mod",
+    "div", "safe_divide", "trunc",
 }
 # Functions allowed in FROM, which sqlglot represents as tables
+# (a month series for counts that include empty months; its size is capped by the 15 s timeout)
 TABLE_FUNCTIONS = {"generate_series", "exploding_generate_series", "unnest", "explode"}
 
 # Anything that writes, changes the schema, or controls the session
@@ -67,7 +87,9 @@ def check_tree(tree: exp.Expression) -> None:
             what = "SELECT ... INTO" if isinstance(node, exp.Into) else \
                    "FOR UPDATE / FOR SHARE" if isinstance(node, exp.Lock) else type(node).__name__
             raise UnsafeSQL(f"{what} is not allowed")
-        if isinstance(node, exp.Func) and _function_name(node) in BLOCKED_FUNCTIONS:
+        # (a function used as a table in FROM is checked against TABLE_FUNCTIONS below)
+        if isinstance(node, exp.Func) and not isinstance(node.parent, exp.Table) \
+                and _function_name(node) not in ALLOWED_FUNCTIONS:
             raise UnsafeSQL(f"function {_function_name(node)}() is not allowed")
 
     cte_names = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}

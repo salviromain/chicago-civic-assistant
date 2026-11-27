@@ -68,3 +68,31 @@ def test_every_example_in_tables_md_passes():
     assert len(queries) >= 7
     for q in queries:
         check_sql(q)
+
+
+@pytest.mark.parametrize("sql", [
+    # information about the server
+    "SELECT inet_server_addr(), version() FROM building_permits",
+    "SELECT current_user FROM building_permits",
+    "SELECT pg_backend_pid() FROM building_permits",
+    # dumping or burning resources
+    "SELECT database_to_xml(true, true, '') FROM building_permits",
+    "SELECT table_to_xml('building_permits', true, true, '') FROM building_permits",
+    "SELECT generate_series(1, 1000000000000) FROM building_permits",
+    "SELECT repeat('x', 1000000000) FROM building_permits",
+    # functions nobody listed on Day 5: an allow-list refuses them too
+    "SELECT pg_stat_get_activity(NULL) FROM building_permits",
+    "SELECT lo_from_bytea(0, 'x') FROM building_permits",
+    "SELECT dblink_connect('host=evil') FROM building_permits",
+    "SELECT pg_read_binary_file('/etc/passwd') FROM building_permits",
+])
+def test_functions_outside_the_allow_list_are_refused(sql):
+    with pytest.raises(UnsafeSQL, match="not allowed"):
+        check_sql(sql)
+
+
+def test_analytics_functions_are_allowed():
+    check_sql("SELECT date_trunc('month', created_date), count(*), avg(x), "
+              "percentile_cont(0.5) WITHIN GROUP (ORDER BY x), round(sum(y)::numeric, 1), "
+              "rank() OVER (ORDER BY count(*) DESC), coalesce(ward, 0), lower(status::text) "
+              "FROM service_requests_311 WHERE sr_type::text ~* '\\mtree' GROUP BY 1, 7, 8")

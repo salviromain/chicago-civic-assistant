@@ -4,6 +4,39 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Security pass (1/4): the SQL guard allow-lists functions instead of deny-listing them
+
+**Goal:** close the gaps found by running 32 hostile queries through `app/sql_guard.py`.
+
+### What got through before
+
+Writes, second statements, system tables and the 25 listed dangerous functions were all blocked. These passed: `inet_server_addr()` and `version()` (the server's address and version), `database_to_xml()` (dumps whole tables as XML), and in principle any harmful function nobody had put on the list. The guard used a **deny-list**: it blocked the dangers someone had thought of.
+
+### The fix: an allow-list
+
+`ALLOWED_FUNCTIONS` lists what counting and summarizing needs (aggregates, window functions, dates, text, math, `CASE`/`CAST`, which sqlglot also treats as functions); everything else is refused. Functions in `FROM` keep their own list (`generate_series`, `unnest`), whose size the 15 s timeout caps.
+
+**Cost in accuracy: none.** Every query known to be right (262 distinct: the reference SQL of all 102 questions, every query the agent wrote in the eval runs, every SQL plan in the reply cache, the examples in `docs/TABLES.md`) still passes.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `app/sql_guard.py` | `ALLOWED_FUNCTIONS` replaces `BLOCKED_FUNCTIONS` |
+| `tests/test_sql_guard.py` | 11 refused functions (server info, XML dumps, `repeat`, `pg_stat_get_activity`, ...); a query using many analytics functions still passes |
+
+### Check it yourself
+
+```bash
+.venv/bin/python -c "from app.sql_guard import check_sql; check_sql('SELECT version() FROM building_permits')"
+```
+
+### Concepts
+
+- **Allow-list vs. deny-list, again:** the same idea as `.dockerignore`. A deny-list fails open (an unlisted danger gets through); an allow-list fails closed (an unlisted need is refused, which a test catches).
+
+---
+
 ## Day 14 (3/3): the page is live; the plan is done
 
 **Goal:** put the page on the live service, check it there, and close the plan.
