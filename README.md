@@ -47,7 +47,7 @@ question ─► /query ──►│                                             
 
 What makes the answers trustworthy:
 
-- **The model never touches the database directly.** Its SQL is parsed (one `SELECT`, only the three tables, no dangerous functions, a row limit), then run as a role that can only read, inside a read-only transaction with a timeout.
+- **The model never touches the database directly.** Its SQL is parsed (one `SELECT`, only the three tables, only allow-listed functions, a row limit), then run as a role that is read-only by itself, inside a read-only transaction with a timeout.
 - **Rules a regular expression can check are checked in code, not just asked for in the prompt** (`app/sql_review.py`): 311 duplicates excluded, city-generated requests kept, average vs. median, ties hidden by `LIMIT 1`. A problem goes back to the model once to fix.
 - **Data traps are documented and tested**: `ILIKE '%tree%'` also matches "Street", the heat rule moved from section 13-196-410 to 14X-8-802.2.2 but the violations data still cites the old number, the budget is proposed, not adopted ([docs/TABLES.md](docs/TABLES.md), [docs/SOURCES.md](docs/SOURCES.md)).
 - **Citations are built by code from the sources actually given to the model**; an answer with no valid citation is turned into a refusal.
@@ -117,6 +117,20 @@ The judge agreed with a hand check on 18 of 20 correctness verdicts and 20 of 20
 | Answer model `gemini-3.5-flash-lite` | **93.0%** | 97.7% | **90.9%** | not adopted: equal after the Day 11 fixes |
 
 † key-phrase relevance; hybrid scores 95.5% on the same measure.
+
+## Security
+
+Checked by testing, not assumed (details: the "Security pass" entries in [docs/BUILD_LOG.md](docs/BUILD_LOG.md)):
+
+| Layer | Defense |
+| --- | --- |
+| LLM-written SQL | Parsed with sqlglot: one `SELECT`, three tables, **allow-listed functions** (32 hostile queries refused; 262 known-good ones pass), row limit |
+| Database | Role `civic_reader`: SELECT on four tables only, read-only by default, no temp tables, 20 connections, 15 s timeout; plus a READ ONLY transaction per query |
+| API | 256-bit API key compared in constant time; key guessing limited; per-client and service-wide rate limits that a forged `X-Forwarded-For` can't dodge; 16 KB body limit; HSTS, nosniff, no framing, no caching on every response |
+| Page | Server text inserted as text only (no `innerHTML`); strict Content Security Policy; only `http(s)` links |
+| Secrets | In Secret Manager; never in git (history scanned), the image or logs; logs hold a salted client hash, not IPs or questions |
+| Cloud | Each service account holds only the permissions it needs; Gemini keys restricted to the Gemini API; the demo key has no billing |
+| Supply chain | Pinned dependencies (pip-audit clean), actions pinned to commit ids, Dependabot, secret scanning with push protection |
 
 ## Limits
 

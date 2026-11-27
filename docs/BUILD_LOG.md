@@ -4,6 +4,28 @@ One entry per commit, newest first. Each entry says what changed, why, how to ch
 
 ---
 
+## Security pass: README "Security" section; live checks
+
+**Goal:** list the defenses where a reader looks, and record the live checks.
+
+A forged `X-Forwarded-For` doesn't dodge the rate limit on the live service: seven requests, each claiming a different address (203.0.113.1 to .7), got `200 200 200 200 200 429 429`. Cloud Run appends the real address and the app reads only that entry (`TRUSTED_PROXIES=1`).
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `README.md` | "Security" table: SQL, database, API, page, secrets, cloud, supply chain; the guard's allow-list in "How it works" |
+
+### Check it yourself
+
+Read the "Security" section of `README.md`.
+
+### Concepts
+
+- **Testing a defense:** a rate limit or a guard is only known to work after someone tries to get around it; each line of the table was attacked once.
+
+---
+
 ## Security pass (4/4): the Mac, GitHub and Google Cloud
 
 **Goal:** the defenses around the code.
